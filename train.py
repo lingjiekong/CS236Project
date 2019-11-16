@@ -7,6 +7,7 @@ import torch.nn as nn
 import numpy as np
 import random
 from utils import set_random_seed,visualize_point_clouds,save,resume
+from utils import apply_random_rotation
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
 
