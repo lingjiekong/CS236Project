@@ -24,7 +24,7 @@ def initilize_optimizer(model,args):
 
 def main_train_loop(save_dir,ngpus_per_node,model,args):
     if torch.cuda.is_available():
-        cudnn.benchmark = True
+        torch.backends.cudnn.benchmark = True
     
     if args.gpu is not None:
         torch.cuda.set_device(args.gpu)

@@ -16,5 +16,5 @@ def distChamfer(a, b):
 
 def CD_loss(sample_pcs,ref_pcs):
     dl, dr = distChamfer(sample_pcs, ref_pcs)
-    cd_loss = dl.mean(dim=1) + dr.mean(dim=1)
+    cd_loss = dl.sum(dim=1) + dr.sum(dim=1)
     return cd_loss

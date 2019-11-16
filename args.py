@@ -42,7 +42,7 @@ def add_args(parser):
                         help='Weight decay for the optimizer.')
     parser.add_argument('--epochs', type=int, default=100,
                         help='Number of epochs for training (default: 100)')
-    parser.add_argument('--seed', type=int, default=None,
+    parser.add_argument('--seed', type=int, default=2019,
                         help='Seed for initializing training. ')
     parser.add_argument('--recon_weight', type=float, default=1.,
                         help='Weight for the reconstruction loss.')

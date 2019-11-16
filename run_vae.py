@@ -8,16 +8,16 @@ from test  import viz_reconstruct, sample_structure
 
 args = get_args()
 #overwrite selected default parameters
-args.cates = ['airplane']     #chair
+#args.cates = ['airplane']     #chair
 args.zdim = 128
 args.batch_size = 16
 args.lr = 2e-3
-args.epochs = 100
+#args.epochs = 100
 args.tr_max_sample_points = 2048
 args.data_dir="data/ShapeNetCore.v2.PC15k"
 
-args.use_deterministic_encoder = False     #AE
-args.log_name = 'vae_model_beta'
+#args.use_deterministic_encoder = False     #AE
+#args.log_name = 'vae_model_beta'
 #args.train_model = 1       #args.train_model=0 for evaluaton
 
 
