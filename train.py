@@ -7,6 +7,7 @@ import torch.nn as nn
 import numpy as np
 import random
 from utils import set_random_seed,visualize_point_clouds,save,resume
+from utils import apply_random_rotation
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
 
@@ -23,8 +24,8 @@ def initilize_optimizer(model,args):
     
 
 def main_train_loop(save_dir,ngpus_per_node,model,args):
-    if torch.cuda.is_available():
-        cudnn.benchmark = True
+    # if torch.cuda.is_available():
+    #     cudnn.benchmark = True
     
     if args.gpu is not None:
         torch.cuda.set_device(args.gpu)
