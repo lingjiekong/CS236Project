@@ -14,6 +14,7 @@ class VAE(nn.Module):
         self.n_point_3 = self.point_dim * self.n_point 
         self.z_dim = args.zdim
         self.loss_type = 'chamfer'
+        self.loss_sum_mean = args.loss_sum_mean
         self.use_deterministic_encoder = args.use_deterministic_encoder
         self.use_encoding_in_decoder = args.use_encoding_in_decoder
         self.encoder = encoder(self.z_dim,self.point_dim,self.use_deterministic_encoder)
@@ -45,8 +46,13 @@ class VAE(nn.Module):
         #compute reconstruction loss 
         if self.loss_type is 'chamfer':
             x_reconst = CD_loss(y,x)
-        x_reconst = x_reconst.mean()
-        kl_loss = kl_loss.mean()
+        # mean or sum
+        if self.loss_sum_mean == "mean":
+            x_reconst = x_reconst.mean()
+            kl_loss = kl_loss.mean()
+        else:
+            x_reconst = x_reconst.sum()
+            kl_loss = kl_loss.sum()
         nelbo = x_reconst + kl_loss
         return nelbo,kl_loss,x_reconst
     
