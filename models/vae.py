@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import utils as ut
 import numpy as np
 from metrics.evaluation_metrics import CD_loss
+import pudb
 
 class VAE(nn.Module):
     def __init__(self,encoder,decoder,args):
@@ -14,8 +15,14 @@ class VAE(nn.Module):
         self.z_dim = args.zdim
         self.loss_type = 'chamfer'
         self.use_deterministic_encoder = args.use_deterministic_encoder
+        self.use_encoding_in_decoder = args.use_encoding_in_decoder
         self.encoder = encoder(self.z_dim,self.point_dim,self.use_deterministic_encoder)
-        self.decoder = decoder(self.z_dim,self.n_point,self.point_dim)
+        
+        if not self.use_deterministic_encoder and self.use_encoding_in_decoder:
+            self.decoder = decoder(2 *self.z_dim,self.n_point,self.point_dim)
+        else:
+            self.decoder = decoder(self.z_dim,self.n_point,self.point_dim)
+           
         #set prior parameters of the vae model p(z)
         self.z_prior_m = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
         self.z_prior_v = torch.nn.Parameter(torch.ones(1), requires_grad=False)
@@ -28,7 +35,9 @@ class VAE(nn.Module):
             kl_loss = torch.zeros(1)
         else:
             z =  ut.sample_gaussian(m,v)
-            y = self.decoder(z)
+            decoder_input = z if not self.use_encoding_in_decoder else \
+            torch.cat((z,m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
+            y = self.decoder(decoder_input)
             #compute KL divergence loss :
             p_m = self.z_prior[0].expand(m.size())
             p_v = self.z_prior[1].expand(v.size())
@@ -46,7 +55,9 @@ class VAE(nn.Module):
         p_m = self.z_prior[0].expand(batch,self.z_dim)
         p_v = self.z_prior[1].expand(batch,self.z_dim)
         z =  ut.sample_gaussian(p_m,p_v)
-        y = self.decoder(z)
+        decoder_input = z if not self.use_encoding_in_decoder else \
+        torch.cat((z,p_m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
+        y = self.decoder(decoder_input)
         return y
 
     def reconstruct_input(self,x):
@@ -55,5 +66,7 @@ class VAE(nn.Module):
             y = self.decoder(m)
         else:
             z =  ut.sample_gaussian(m,v)
-            y = self.decoder(z)
+            decoder_input = z if not self.use_encoding_in_decoder else \
+            torch.cat((z,m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
+            y = self.decoder(decoder_input)
         return y

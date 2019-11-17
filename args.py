@@ -24,6 +24,9 @@ def add_args(parser):
                         help='Whether to use the latent flow to model the prior.')
     parser.add_argument('--use_deterministic_encoder', action='store_true',
                         help='Whether to use a deterministic encoder.')
+    
+    parser.add_argument('--use_encoding_in_decoder', action='store_true', default= False,
+                        help='Whether to append encoder outputs alongside z to the decoder input.')
     parser.add_argument('--zdim', type=int, default=128,
                         help='Dimension of the shape code')
     parser.add_argument('--optimizer', type=str, default='adam',
