@@ -40,7 +40,7 @@ if args.train_model == 0:
     args.resume_checkpoint='checkpoints/'+args.log_name+'/checkpoint-latest.pt'
     if torch.cuda.is_available():
         torch.cuda.set_device(args.gpu)
-        model = model.cuda(arg.gpu)
+        model = model.cuda(args.gpu)
     print("Resume Path:%s" % args.resume_checkpoint)
     checkpoint = torch.load(args.resume_checkpoint)
     model.load_state_dict(checkpoint['model'],strict=True)
