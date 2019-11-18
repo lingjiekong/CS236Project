@@ -5,6 +5,7 @@ import utils as ut
 import numpy as np
 from metrics.evaluation_metrics import CD_loss
 import pudb
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class VAE(nn.Module):
     def __init__(self,encoder,decoder,args):
@@ -58,8 +59,8 @@ class VAE(nn.Module):
     
 
     def sample_point(self,batch):
-        p_m = self.z_prior[0].expand(batch,self.z_dim)
-        p_v = self.z_prior[1].expand(batch,self.z_dim)
+        p_m = self.z_prior[0].expand(batch,self.z_dim).to(device)
+        p_v = self.z_prior[1].expand(batch,self.z_dim).to(device)
         z =  ut.sample_gaussian(p_m,p_v)
         decoder_input = z if not self.use_encoding_in_decoder else \
         torch.cat((z,p_m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.

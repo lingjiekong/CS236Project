@@ -7,11 +7,11 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 def sample_gaussian(m, v):
-    epsilon = torch.normal(torch.zeros(m.size()),torch.ones(m.size()))
+    epsilon = torch.normal(torch.zeros(m.size()),torch.ones(m.size())).to(device)
     z = m + torch.sqrt(v) * epsilon
     return z
 

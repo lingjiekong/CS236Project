@@ -5,6 +5,7 @@ from models.vae import VAE
 from models.networks import Encoder, MLP_Decoder, MLP_Conv_v1, MLP_Conv_v2
 from train import train
 from test  import viz_reconstruct, sample_structure
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 args = get_args()
 #overwrite selected default parameters
