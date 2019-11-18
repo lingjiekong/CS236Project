@@ -7,6 +7,8 @@ from args import get_args
 from metrics.evaluation_metrics import CD_loss
 from utils import visualize_point_clouds_4
 from matplotlib.pyplot import imsave
+import random
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def get_train_loader(args):
     tr_dataset , _ = get_datasets(args)
@@ -17,8 +19,9 @@ def get_train_loader(args):
 
 def viz_reconstruct(model,args):
     loader = iter(get_train_loader(args))
-    data = next(loader)
-    tr_batch =  data['train_points']
+    for i in range(np.random.randint(1,10)):
+        data = next(loader)
+    tr_batch =  data['train_points'].to(device)
     with torch.no_grad():
         samples = model.reconstruct_input(tr_batch)
         g_truth=CD_loss(tr_batch,samples)
