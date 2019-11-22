@@ -1,5 +1,4 @@
 import torch
-
 # Borrow from https://github.com/ThibaultGROUEIX/AtlasNet
 #computes CH distance bwtween two point sets
 def distChamfer(a, b):

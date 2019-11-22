@@ -5,7 +5,7 @@ from models.vae import VAE
 from models.networks import Encoder, MLP_Decoder, MLP_Conv_v1, MLP_Conv_v2
 from train import train
 from test  import viz_reconstruct, sample_structure
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+#import pudb
 
 args = get_args()
 #overwrite selected default parameters
@@ -22,14 +22,10 @@ args.loss_sum_mean = "mean" # can be also "mean"
 #args.log_name = 'vae_model_beta'
 #args.train_model = 1       #args.train_model=0 for evaluaton
 
-
 print("args.epochs",args.epochs,args.log_freq,args.random_rotate)
 
 encoder = Encoder
 decoder = MLP_Conv_v1  #MLP_Decoder
-
-if torch.cuda.is_available():
-    device = torch.device("cuda") 
     
 model = VAE(encoder,decoder,args)
 

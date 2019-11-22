@@ -6,11 +6,11 @@ from torch import optim
 import torch.nn as nn
 import numpy as np
 import random
+import warnings
 from utils import set_random_seed,visualize_point_clouds,save,resume
 from utils import apply_random_rotation
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
-
 
 def initilize_optimizer(model,args):
     if args.optimizer == 'adam':
@@ -98,7 +98,7 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
                 inputs = tr_batch
 
             optimizer.zero_grad()
-            nelbo, kl_loss, x_reconst = model(tr_batch)
+            nelbo, kl_loss, x_reconst = model(inputs)
             nelbo.backward()
             optimizer.step()
 
@@ -121,7 +121,7 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
     #save final visuliztion of 10 samples
     model.eval()
     with torch.no_grad():
-        samples_A = model.reconstruct_input(tr_batch)  #sample_point(5)
+        samples_A = model.reconstruct_input(inputs)  #sample_point(5)
         results = []
         for idx in range(5):
             res = visualize_point_clouds(samples_A[idx],tr_batch[idx],idx,
