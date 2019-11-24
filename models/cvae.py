@@ -5,6 +5,8 @@ import utils as ut
 import numpy as np
 from metrics.evaluation_metrics import CD_loss
 
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
 class Classifier(nn.Module):
     def __init__(self,input_dim,out_class):
         super(Classifier,self).__init__()
@@ -41,14 +43,16 @@ class CVAE(nn.Module):
         self.z_prior_m = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
         self.z_prior_v = torch.nn.Parameter(torch.ones(1), requires_grad=False)
         self.z_prior = (self.z_prior_m, self.z_prior_v)
+        self.type = 'CVAE'
     
-    def forward(self,x,y_class):
+    def forward(self, inputs):
+        x,y_class = inputs['x'], inputs['y_class']
         m, v = self.encoder(x)
         if self.use_deterministic_encoder:
             y = self.decoder(m)
             kl_loss = torch.zeros(1)
         else:
-            z =  ut.sample_gaussian(m,v)
+            z =  ut.sample_gaussian(m,v).to(device)
             y = self.decoder(z)
             #compute KL divergence loss :
             p_m = self.z_prior[0].expand(m.size())
@@ -57,6 +61,7 @@ class CVAE(nn.Module):
         #compute reconstruction loss 
         if self.loss_type is 'chamfer':
             x_reconst = CD_loss(y,x)
+        
         x_reconst = x_reconst.mean()
         kl_loss = kl_loss.mean()
         #compute classifers
@@ -64,12 +69,13 @@ class CVAE(nn.Module):
         cl_loss = self.z_classifer.cross_entropy_loss(y_logits,y_class)
         nelbo = x_reconst + kl_loss 
         loss = nelbo + cl_loss
-        return loss,nelbo,kl_loss,x_reconst,cl_loss
+        ret = {'loss':loss, 'nelbo':nelbo, 'kl_loss':kl_loss, 'x_reconst':x_reconst, 'cl_loss':cl_loss}
+        return ret
     
 
     def sample_point(self,batch):
-        p_m = self.z_prior[0].expand(batch,self.z_dim)
-        p_v = self.z_prior[1].expand(batch,self.z_dim)
+        p_m = self.z_prior[0].expand(batch,self.z_dim).to(device)
+        p_v = self.z_prior[1].expand(batch,self.z_dim).to(device)
         z =  ut.sample_gaussian(p_m,p_v)
         y = self.decoder(z)
         return y

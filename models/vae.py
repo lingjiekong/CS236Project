@@ -4,7 +4,6 @@ import torch.nn.functional as F
 import utils as ut
 import numpy as np
 from metrics.evaluation_metrics import CD_loss
-import pudb
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 class VAE(nn.Module):
@@ -29,8 +28,10 @@ class VAE(nn.Module):
         self.z_prior_m = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
         self.z_prior_v = torch.nn.Parameter(torch.ones(1), requires_grad=False)
         self.z_prior = (self.z_prior_m, self.z_prior_v)
+        self.type = 'VAE'
     
-    def forward(self,x):
+    def forward(self, inputs):
+        x = inputs['x']
         m, v = self.encoder(x)
         if self.use_deterministic_encoder:
             y = self.decoder(m)
@@ -55,7 +56,9 @@ class VAE(nn.Module):
             x_reconst = x_reconst.sum()
             kl_loss = kl_loss.sum()
         nelbo = x_reconst + kl_loss
-        return nelbo,kl_loss,x_reconst
+        
+        ret = {'nelbo':nelbo, 'kl_loss':kl_loss, 'x_reconst':x_reconst}
+        return ret
     
 
     def sample_point(self,batch):

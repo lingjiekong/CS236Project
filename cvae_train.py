@@ -9,7 +9,7 @@ import random
 from utils import set_random_seed,visualize_point_clouds,save,resume,apply_random_rotation
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
-
+from test import evaluate_model
 
 def initilize_optimizer(model,args):
     if args.optimizer == 'adam':
@@ -22,17 +22,14 @@ def initilize_optimizer(model,args):
     return optimizer
     
 
-def main_train_loop(save_dir,ngpus_per_node,model,args):
+def main_train_loop(save_dir,model,args):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     n_class = len(args.cates)
     if torch.cuda.is_available():
-        cudnn.benchmark = True
-    
-    if args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
-    
+        torch.backends.cudnn.enabled = False 
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
     #resume chekckpoint
     start_epoch = 0
     optimizer=initilize_optimizer(model,args)
@@ -55,11 +52,11 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
     train_loader = torch.utils.data.DataLoader(
         dataset=tr_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=0, pin_memory=True, sampler=train_sampler, drop_last=True,
-        worker_init_fn=init_np_seed)
+        worker_init_fn=np.random.seed(args.seed))
     test_loader = torch.utils.data.DataLoader(
         dataset=te_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=0, pin_memory=True, drop_last=False,
-        worker_init_fn=init_np_seed)
+        worker_init_fn=np.random.seed(args.seed))
     
     #initialize the learning rate scheduler
     if args.scheduler == 'exponential':
@@ -79,6 +76,7 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
     tot_kl_loss=[]
     tot_x_reconst=[]
 
+    best_eval_metric = float('+inf')
 
     for epoch in range(start_epoch,args.epochs):
         # adjust the learning rate
@@ -95,14 +93,13 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
             if args.random_rotate:
                 tr_batch, _, _ = apply_random_rotation(
                     tr_batch, rot_axis=train_loader.dataset.gravity_axis)
-
-            if torch.cuda.is_available():
-                inputs = tr_batch.cuda(args.gpu, non_blocking=True)
-            else:
-                inputs = tr_batch
-
+                
+            inputs = tr_batch.to(device)
+            y_one_hot = y_one_hot.to(device)
             optimizer.zero_grad()
-            loss, nelbo, kl_loss, x_reconst, cl_loss = model(tr_batch,y_one_hot)
+            inputs_dict = {'x':inputs, 'y_class':y_one_hot}
+            ret = model(inputs_dict)
+            loss, nelbo, kl_loss, x_reconst, cl_loss = ret['loss'], ret['nelbo'], ret['kl_loss'], ret['x_reconst'], ret['cl_loss']
             loss.backward()
             optimizer.step()
 
@@ -123,11 +120,20 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-%d.pt' % epoch))
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-latest.pt'))
 
+            eval_metric = evaluate_model(model, te_dataset, args)
+            train_metric = evaluate_model(model, tr_dataset, args)
+            
+            print('Checkpoint: Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric))
+            if eval_metric < best_eval_metric:
+                best_eval_metric = eval_metric
+                save(model, optimizer, epoch + 1, os.path.join(save_dir, 'checkpoint-best.pt'))
+                print('new best model found!')
+                
     save(model, optimizer, args.epochs,os.path.join(save_dir, 'checkpoint-latest.pt'))
     #save final visuliztion of 10 samples
     model.eval()
     with torch.no_grad():
-        samples_A = model.reconstruct_input(tr_batch)  #sample_point(5)
+        samples_A = model.reconstruct_input(inputs)  #sample_point(5)
         results = []
         for idx in range(5):
             res = visualize_point_clouds(samples_A[idx],tr_batch[idx],idx,
@@ -136,7 +142,14 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
         res = np.concatenate(results, axis=1)
         imsave(os.path.join(save_dir, 'images', '_epoch%d.png' % (epoch)), res.transpose((1, 2, 0)))
 
-
+    #load the best model and compute eval metric:
+    best_model_path = os.path.join(save_dir, 'checkpoint-best.pt')
+    ckpt = torch.load(best_model_path)
+    model.load_state_dict(ckpt['model'], strict=True)
+    eval_metric = evaluate_model(model, te_dataset, args)
+    train_metric = evaluate_model(model, tr_dataset, args)
+    print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
+            
 def train(model,args):
     save_dir = os.path.join("checkpoints", args.log_name)
     if not os.path.exists(save_dir):
@@ -146,14 +159,10 @@ def train(model,args):
     if args.seed is None:
         args.seed = random.randint(0, 1000000)
     set_random_seed(args.seed)
-
-    if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely ' 'disable data parallelism.')
     
     print("--------Arguments--------")
     print(args)
     print("--------------------------")
 
-    ngpus_per_node = torch.cuda.device_count()
-    main_train_loop(save_dir,ngpus_per_node,model,args)
+    main_train_loop(save_dir,model,args)
     return

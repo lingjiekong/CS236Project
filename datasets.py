@@ -4,7 +4,6 @@ import numpy as np
 from torch.utils.data import Dataset
 from torch.utils import data
 import random
-
 # taken from https://github.com/optas/latent_3d_points/blob/8e8f29f8124ed5fc59439e8551ba7ef7567c9a37/src/in_out.py
 synsetid_to_cate = {
     '02691156': 'airplane', '02773838': 'bag', '02801938': 'basket',
@@ -273,7 +272,7 @@ class ShapeNet15kPointClouds(Uniform15KPC):
 
 def init_np_seed(worker_id):
     seed = torch.initial_seed()
-    np.random.seed(seed % 4294967296)
+    np.random.seed(2019)
 
 
 def _get_MN40_datasets_(args, data_dir=None):

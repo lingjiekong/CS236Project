@@ -9,8 +9,11 @@ import random
 import warnings
 from utils import set_random_seed,visualize_point_clouds,save,resume
 from utils import apply_random_rotation
+from test import evaluate_model
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def initilize_optimizer(model,args):
     if args.optimizer == 'adam':
@@ -23,13 +26,9 @@ def initilize_optimizer(model,args):
     return optimizer
     
 
-def main_train_loop(save_dir,ngpus_per_node,model,args):
+def main_train_loop(save_dir,model,args):
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = True
-    
-    if args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
     
     #resume chekckpoint
     start_epoch = 0
@@ -76,7 +75,8 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
     tot_nelbo=[]
     tot_kl_loss=[]
     tot_x_reconst=[]
-
+    
+    best_eval_metric = float('+inf')
 
     for epoch in range(start_epoch,args.epochs):
         # adjust the learning rate
@@ -92,13 +92,12 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
                 tr_batch, _, _ = apply_random_rotation(
                     tr_batch, rot_axis=train_loader.dataset.gravity_axis)
 
-            if torch.cuda.is_available():
-                inputs = tr_batch.cuda(args.gpu, non_blocking=True)
-            else:
-                inputs = tr_batch
+            inputs = tr_batch.to(device)
 
             optimizer.zero_grad()
-            nelbo, kl_loss, x_reconst = model(inputs)
+            inputs_dict = {'x':inputs}
+            ret = model(inputs_dict)
+            nelbo, kl_loss, x_reconst = ret['nelbo'], ret['kl_loss'], ret['x_reconst']
             nelbo.backward()
             optimizer.step()
 
@@ -108,6 +107,7 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
             tot_nelbo.append(cur_nelbo)
             tot_kl_loss.append(cur_kl_loss)
             tot_x_reconst.append(cur_x_reconst)
+            
             if step % args.log_freq == 0:
                 print("Epoch {} Step {} Nelbo {} KL Loss {} Reconst Loss {}"
                 .format(epoch,step,cur_nelbo,cur_kl_loss,cur_x_reconst))
@@ -116,6 +116,14 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
         if (epoch + 1) % args.save_freq == 0:
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-%d.pt' % epoch))
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-latest.pt'))
+            eval_metric = evaluate_model(model, te_dataset)
+            train_metric = evaluate_model(model, tr_dataset)
+            print('Checkpoint: Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric))
+            if eval_metric < best_eval_metric:
+                best_eval_metric = eval_metric
+                save(model, optimizer, epoch + 1, os.path.join(save_dir, 'checkpoint-best.pt'))
+                print('new best model found!')
+           
 
     save(model, optimizer, args.epochs,os.path.join(save_dir, 'checkpoint-latest.pt'))
     #save final visuliztion of 10 samples
@@ -130,7 +138,14 @@ def main_train_loop(save_dir,ngpus_per_node,model,args):
         res = np.concatenate(results, axis=1)
         imsave(os.path.join(save_dir, 'images', '_epoch%d.png' % (epoch)), res.transpose((1, 2, 0)))
 
-
+    #load the best model and compute eval metric:
+    best_model_path = os.path.join(save_dir, 'checkpoint-best.pt')
+    ckpt = torch.load(best_model_path)
+    model.load_state_dict(ckpt['model'], strict=True)
+    eval_metric = evaluate_model(model, te_dataset)
+    train_metric = evaluate_model(model, tr_dataset)
+    print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
+            
 def train(model,args):
     save_dir = os.path.join("checkpoints", args.log_name)
     if not os.path.exists(save_dir):
@@ -141,13 +156,10 @@ def train(model,args):
         args.seed = random.randint(0, 1000000)
     set_random_seed(args.seed)
 
-    if args.gpu is not None:
-        warnings.warn('You have chosen a specific GPU. This will completely ' 'disable data parallelism.')
     
     print("--------Arguments--------")
     print(args)
     print("--------------------------")
 
-    ngpus_per_node = torch.cuda.device_count()
-    main_train_loop(save_dir,ngpus_per_node,model,args)
+    main_train_loop(save_dir,model,args)
     return

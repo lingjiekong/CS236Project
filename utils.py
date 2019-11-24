@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-
 def sample_gaussian(m, v):
     epsilon = torch.normal(torch.zeros(m.size()),torch.ones(m.size())).to(device)
     z = m + torch.sqrt(v) * epsilon
@@ -138,3 +137,4 @@ def visualize_point_clouds_4(pts_1, gtr_1, pts_2, gtr_2,idx_1, idx_2,pert_order=
 
     plt.close()
     return res
+

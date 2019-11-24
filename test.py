@@ -45,7 +45,40 @@ def sample_structure(model):
         res = np.concatenate(results, axis=1)
         imsave('samples.png', res.transpose((1, 2, 0)))
 
+def evaluate_model(model, dataset, args, init_seed=2019, batch_size=64):
+    total_reconstruct_loss = 0
+    model.eval()    
+    data_iter = torch.utils.data.DataLoader(
+                                dataset=dataset, 
+                                batch_size= batch_size, 
+                                shuffle=False,
+                                num_workers=0, 
+                                pin_memory=True, 
+                                drop_last=False,
+                                worker_init_fn=init_seed)
+    with torch.no_grad():
+        for bidx, data in enumerate(data_iter):
+            idx_batch, tr_batch, te_batch = data['idx'], data['train_points'], data['test_points']
 
+#             if args.random_rotate:
+#                 tr_batch, _, _ = apply_random_rotation(
+#                     tr_batch, rot_axis=train_loader.dataset.gravity_axis)
+
+            inputs = tr_batch.to(device)
+            inputs_dict = {'x':inputs}
+
+            if model.type == 'CVAE':
+                n_class = len(args.cates)
+                obj_type = data['cate_idx']
+                y_one_hot = obj_type.new(np.eye(n_class)[obj_type]).float()   
+                inputs_dict['y_class'] = y_one_hot.to(device)
+                
+            ret = model(inputs_dict)
+            x_reconst = ret['x_reconst']
+
+            cur_x_reconst = x_reconst.cpu().item()
+            total_reconstruct_loss += cur_x_reconst
+        return total_reconstruct_loss / (bidx+1)
 
 
 
