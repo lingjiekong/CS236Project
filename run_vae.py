@@ -3,6 +3,7 @@ import numpy as np
 from args import get_args
 from models.vae import VAE
 from models.networks import Encoder, MLP_Decoder, MLP_Conv_v1, MLP_Conv_v2
+from utils import set_random_seed
 from train import train
 from test  import viz_reconstruct, sample_structure
 
@@ -17,6 +18,7 @@ args.tr_max_sample_points = 2048
 args.data_dir="data/ShapeNetCore.v2.PC15k"
 args.loss_sum_mean = "mean" # can be also "mean"
 
+set_random_seed(args.seed)
 
 print("args.epochs",args.epochs,args.log_freq,args.random_rotate)
 

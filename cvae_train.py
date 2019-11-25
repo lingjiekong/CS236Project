@@ -26,10 +26,6 @@ def main_train_loop(save_dir,model,args):
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     n_class = len(args.cates)
-    if torch.cuda.is_available():
-        torch.backends.cudnn.enabled = False 
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
     #resume chekckpoint
     start_epoch = 0
     optimizer=initilize_optimizer(model,args)

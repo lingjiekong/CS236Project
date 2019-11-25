@@ -27,9 +27,6 @@ def initilize_optimizer(model,args):
     
 
 def main_train_loop(save_dir,model,args):
-    if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = True
-    
     #resume chekckpoint
     start_epoch = 0
     optimizer=initilize_optimizer(model,args)
@@ -116,8 +113,8 @@ def main_train_loop(save_dir,model,args):
         if (epoch + 1) % args.save_freq == 0:
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-%d.pt' % epoch))
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-latest.pt'))
-            eval_metric = evaluate_model(model, te_dataset)
-            train_metric = evaluate_model(model, tr_dataset)
+            eval_metric = evaluate_model(model, te_dataset, args)
+            train_metric = evaluate_model(model, tr_dataset, args)
             print('Checkpoint: Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric))
             if eval_metric < best_eval_metric:
                 best_eval_metric = eval_metric
@@ -142,8 +139,8 @@ def main_train_loop(save_dir,model,args):
     best_model_path = os.path.join(save_dir, 'checkpoint-best.pt')
     ckpt = torch.load(best_model_path)
     model.load_state_dict(ckpt['model'], strict=True)
-    eval_metric = evaluate_model(model, te_dataset)
-    train_metric = evaluate_model(model, tr_dataset)
+    eval_metric = evaluate_model(model, te_dataset, args)
+    train_metric = evaluate_model(model, tr_dataset, args)
     print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
             
 def train(model,args):
@@ -151,11 +148,6 @@ def train(model,args):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
         os.makedirs(os.path.join(save_dir, 'images'))
-        
-    if args.seed is None:
-        args.seed = random.randint(0, 1000000)
-    set_random_seed(args.seed)
-
     
     print("--------Arguments--------")
     print(args)

@@ -80,7 +80,9 @@ def set_random_seed(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-
+        torch.backends.cudnn.enabled = False 
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True 
 # Visualization
 def visualize_point_clouds(pts, gtr, idx, pert_order=[0, 1, 2]):
     pts = pts.cpu().detach().numpy()[:, pert_order]

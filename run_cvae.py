@@ -4,6 +4,7 @@ from args import get_args
 from models.cvae import CVAE
 from models.networks import Encoder, MLP_Decoder, MLP_Conv_v1, MLP_Conv_v2
 from cvae_train import train
+from utils import set_random_seed
 from test  import viz_reconstruct, sample_structure
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -15,6 +16,8 @@ args.batch_size = 64
 args.lr = 2e-3
 args.tr_max_sample_points = 2048
 args.data_dir="data/ShapeNetCore.v2.PC15k"
+
+set_random_seed(args.seed)
 
 
 print("args.epochs",args.epochs,args.log_freq,args.random_rotate)

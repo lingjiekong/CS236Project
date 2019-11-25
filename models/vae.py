@@ -5,6 +5,7 @@ import utils as ut
 import numpy as np
 from metrics.evaluation_metrics import CD_loss
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+import pudb
 
 class VAE(nn.Module):
     def __init__(self,encoder,decoder,args):
