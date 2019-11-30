@@ -7,28 +7,9 @@ from metrics.evaluation_metrics import CD_loss
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-class Classifier(nn.Module):
-    def __init__(self,input_dim,out_class):
-        super(Classifier,self).__init__()
-        self.input_dim = input_dim
-        self.out_class = out_class
-        self.fc1 = nn.Linear(self.input_dim,256)
-        self.output = nn.Linear(256, self.out_class)
-    
-    def forward(self,x):
-        x = F.relu(self.fc1(x))
-        y_logits = self.output(x)
-        return y_logits
-    
-    def compute_prob_y(self,y_logits):
-        return torch.softmax(y_logits,dim=1)
-
-    def cross_entropy_loss(self,y_logits,y):
-        return F.cross_entropy(y_logits, y.argmax(1),reduction='mean')
-
 
 class CVAE(nn.Module):
-    def __init__(self,encoder,decoder,args):
+    def __init__(self,encoder,decoder,classifier,args):
         super(CVAE, self).__init__()
         self.n_point = args.tr_max_sample_points
         self.point_dim = 3
@@ -38,7 +19,7 @@ class CVAE(nn.Module):
         self.use_deterministic_encoder = args.use_deterministic_encoder
         self.encoder = encoder(self.z_dim,self.point_dim,self.use_deterministic_encoder)
         self.decoder = decoder(self.z_dim,self.n_point,self.point_dim)
-        self.z_classifer = Classifier(self.z_dim,len(args.cates))
+        self.z_classifer = classifier(self.z_dim,len(args.cates))
         #set prior parameters of the vae model p(z)
         self.z_prior_m = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
         self.z_prior_v = torch.nn.Parameter(torch.ones(1), requires_grad=False)

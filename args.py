@@ -63,7 +63,7 @@ def add_args(parser):
     # data options
     parser.add_argument('--dataset_type', type=str, default="shapenet15k",
                         help="Dataset types.", choices=['shapenet15k', 'modelnet40_15k', 'modelnet10_15k'])
-    parser.add_argument('--cates', type=str, nargs='+', default=["airplane"],
+    parser.add_argument('--cates', type=str, nargs='+', default=["airplane", "chair", "car"],
                         help="Categories to be trained (useful only if 'shapenet' is selected)")
     parser.add_argument('--data_dir', type=str, default="data/ShapeNetCore.v2.PC15k",
                         help="Path to the training data")

@@ -9,7 +9,7 @@ import random
 import warnings
 from utils import set_random_seed,visualize_point_clouds,save,resume
 from utils import apply_random_rotation
-from test import evaluate_model
+from test import evaluate_model, evaluate_classifer_model
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
 
@@ -29,10 +29,12 @@ def initilize_optimizer(model,args):
 def main_train_loop(save_dir,model,args):
     #resume chekckpoint
     start_epoch = 0
+    n_class = len(args.cates)
     optimizer=initilize_optimizer(model,args)
+    model_dir = os.path.join("checkpoints", args.train_model_name)
+    # resume model for training
     if args.resume_checkpoint is None and os.path.exists(os.path.join(save_dir, 'checkpoint-latest.pt')):
         args.resume_checkpoint = os.path.join(save_dir, 'checkpoint-latest.pt')  # use the latest checkpoint
-    if args.resume_checkpoint is not None:
         if args.resume_optimizer:
             model, optimizer, start_epoch = resume(
                 args.resume_checkpoint, model, optimizer, strict=(not args.resume_non_strict))
@@ -40,6 +42,20 @@ def main_train_loop(save_dir,model,args):
             model, _, start_epoch = resume(
                 args.resume_checkpoint, model, optimizer=None, strict=(not args.resume_non_strict))
         print('Resumed from: ' + args.resume_checkpoint)
+    # load model to train for classifier
+    elif args.resume_checkpoint is None and os.path.exists(os.path.join(model_dir, 'checkpoint-latest.pt')):
+        args.resume_checkpoint = os.path.join(model_dir, 'checkpoint-latest.pt') 
+        model, _, _ = resume(
+                args.resume_checkpoint, model, optimizer=None, strict=(not args.resume_non_strict))
+        print ('laten space classification')
+        
+    # turn off gradient for encoder part
+    if args.log_name == "classifier":
+        for param in model.encoder.parameters():
+            param.requires_grad = False
+    else:
+        for param in model.encoder.parameters():
+            param.requires_grad = True
     
     #initilize dataset and load
     tr_dataset, te_dataset = get_datasets(args)
@@ -72,6 +88,7 @@ def main_train_loop(save_dir,model,args):
     tot_nelbo=[]
     tot_kl_loss=[]
     tot_x_reconst=[]
+    tot_z_cl_loss = []
     
     best_eval_metric = float('+inf')
 
@@ -83,6 +100,9 @@ def main_train_loop(save_dir,model,args):
         model.train()
         for bidx, data in enumerate(train_loader):
             idx_batch, tr_batch, te_batch = data['idx'], data['train_points'], data['test_points']
+            obj_type = data['cate_idx']
+            y_one_hot = obj_type.new(np.eye(n_class)[obj_type]).to(device).float()
+
             step = bidx + len(train_loader) * epoch
 
             if args.random_rotate:
@@ -90,58 +110,70 @@ def main_train_loop(save_dir,model,args):
                     tr_batch, rot_axis=train_loader.dataset.gravity_axis)
 
             inputs = tr_batch.to(device)
-
+            y_one_hot = y_one_hot.to(device)
             optimizer.zero_grad()
-            inputs_dict = {'x':inputs}
+            inputs_dict = {'x':inputs, 'y_class':y_one_hot}
             ret = model(inputs_dict)
-            nelbo, kl_loss, x_reconst = ret['nelbo'], ret['kl_loss'], ret['x_reconst']
-            nelbo.backward()
-            optimizer.step()
-
-            cur_nelbo= nelbo.cpu().item()
-            cur_kl_loss = kl_loss.cpu().item()
-            cur_x_reconst = x_reconst.cpu().item()
-            tot_nelbo.append(cur_nelbo)
-            tot_kl_loss.append(cur_kl_loss)
-            tot_x_reconst.append(cur_x_reconst)
-            
-            if step % args.log_freq == 0:
-                print("Epoch {} Step {} Nelbo {} KL Loss {} Reconst Loss {}"
-                .format(epoch,step,cur_nelbo,cur_kl_loss,cur_x_reconst))
+            if args.log_name != 'classifier':
+                nelbo, kl_loss, x_reconst = ret['nelbo'], ret['kl_loss'], ret['x_reconst']
+                nelbo.backward()
+                optimizer.step()
+                cur_nelbo= nelbo.cpu().item()
+                cur_kl_loss = kl_loss.cpu().item()
+                cur_x_reconst = x_reconst.cpu().item()
+                tot_nelbo.append(cur_nelbo)
+                tot_kl_loss.append(cur_kl_loss)
+                tot_x_reconst.append(cur_x_reconst)
+                if step % args.log_freq == 0:
+                    print("Epoch {} Step {} Nelbo {} KL Loss {} Reconst Loss {}"
+                    .format(epoch,step,cur_nelbo,cur_kl_loss,cur_x_reconst))
+            else:
+                z_cl_loss = ret['z_cl_loss']
+                z_cl_loss.backward()
+                optimizer.step()
+                cur_z_cl_loss = z_cl_loss.cpu().item()
+                tot_z_cl_loss.append(cur_z_cl_loss)
+                if step % args.log_freq == 0:
+                    print("Epoch {} Step {} z cl loss {}".format(epoch, step, cur_z_cl_loss))
         
         #save checkpoint
         if (epoch + 1) % args.save_freq == 0:
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-%d.pt' % epoch))
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-latest.pt'))
-            eval_metric = evaluate_model(model, te_dataset, args)
-            train_metric = evaluate_model(model, tr_dataset, args)
-            print('Checkpoint: Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric))
+            if args.log_name != 'classifier':
+                eval_metric = evaluate_model(model, te_dataset, args)
+                train_metric = evaluate_model(model, tr_dataset, args)
+                print('Checkpoint: Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric))
+            else:
+                eval_metric = evaluate_classifer_model(model, te_dataset, args)
+                train_metric = evaluate_classifer_model(model, tr_dataset, args)
+                print('Checkpoint: Dev Loss:{0}, Train Loss:{1}'.format(eval_metric, train_metric))            
             if eval_metric < best_eval_metric:
                 best_eval_metric = eval_metric
                 save(model, optimizer, epoch + 1, os.path.join(save_dir, 'checkpoint-best.pt'))
                 print('new best model found!')
-           
 
     save(model, optimizer, args.epochs,os.path.join(save_dir, 'checkpoint-latest.pt'))
-    #save final visuliztion of 10 samples
-    model.eval()
-    with torch.no_grad():
-        samples_A = model.reconstruct_input(inputs)  #sample_point(5)
-        results = []
-        for idx in range(5):
-            res = visualize_point_clouds(samples_A[idx],tr_batch[idx],idx,
-                    pert_order=train_loader.dataset.display_axis_order)
-            results.append(res)
-        res = np.concatenate(results, axis=1)
-        imsave(os.path.join(save_dir, 'images', '_epoch%d.png' % (epoch)), res.transpose((1, 2, 0)))
+    if args.log_name != 'classifier':
+        #save final visuliztion of 10 samples
+        model.eval()
+        with torch.no_grad():
+            samples_A = model.reconstruct_input(inputs)  #sample_point(5)
+            results = []
+            for idx in range(5):
+                res = visualize_point_clouds(samples_A[idx],tr_batch[idx],idx,
+                        pert_order=train_loader.dataset.display_axis_order)
+                results.append(res)
+            res = np.concatenate(results, axis=1)
+            imsave(os.path.join(save_dir, 'images', '_epoch%d.png' % (epoch)), res.transpose((1, 2, 0)))
 
-    #load the best model and compute eval metric:
-    best_model_path = os.path.join(save_dir, 'checkpoint-best.pt')
-    ckpt = torch.load(best_model_path)
-    model.load_state_dict(ckpt['model'], strict=True)
-    eval_metric = evaluate_model(model, te_dataset, args)
-    train_metric = evaluate_model(model, tr_dataset, args)
-    print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
+        #load the best model and compute eval metric:
+        best_model_path = os.path.join(save_dir, 'checkpoint-best.pt')
+        ckpt = torch.load(best_model_path)
+        model.load_state_dict(ckpt['model'], strict=True)
+        eval_metric = evaluate_model(model, te_dataset, args)
+        train_metric = evaluate_model(model, tr_dataset, args)
+        print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
             
 def train(model,args):
     save_dir = os.path.join("checkpoints", args.log_name)

@@ -126,10 +126,43 @@ class MLP_Conv_v2(nn.Module):
         return output
 
 
+class Classifier(nn.Module):
+    def __init__(self,input_dim,out_class):
+        super(Classifier,self).__init__()
+        self.input_dim = input_dim
+        self.out_class = out_class
+        self.fc1 = nn.Linear(self.input_dim,256)
+        self.output = nn.Linear(256, self.out_class)
+    
+    def forward(self,x):
+        x = F.relu(self.fc1(x))
+        y_logits = self.output(x)
+        return y_logits
+    
+    def compute_prob_y(self,y_logits):
+        return torch.softmax(y_logits,dim=1)
+
+    def cross_entropy_loss(self,y_logits,y):
+        return F.cross_entropy(y_logits, y.argmax(1),reduction='mean')
 
 
+class ZClassifier(nn.Module):
+    def __init__(self, zdim, label_dim=3):
+        super(ZClassifier, self).__init__()
+        self.fc1 = nn.Linear(zdim, 1024)
+        self.fc2 = nn.Linear(1024, 512)
+        self.fc3 = nn.Linear(512, 256)
+        self.output = nn.Linear(256, label_dim)
 
+    def forward(self, z):
+        x = F.relu(self.fc1(z))
+        x = F.relu(self.fc2(x))
+        x = F.relu(self.fc3(x))
+        output = self.output(x)
+        return output
 
+    def compute_prob_y(self,y_logits):
+        return torch.softmax(y_logits,dim=1)
 
-
-
+    def cross_entropy_loss(self,y_logits,y):
+        return F.cross_entropy(y_logits, y.argmax(1),reduction='mean')

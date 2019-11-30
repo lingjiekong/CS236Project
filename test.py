@@ -67,11 +67,11 @@ def evaluate_model(model, dataset, args, init_seed=2019, batch_size=64):
             inputs = tr_batch.to(device)
             inputs_dict = {'x':inputs}
 
-            if model.type == 'CVAE':
-                n_class = len(args.cates)
-                obj_type = data['cate_idx']
-                y_one_hot = obj_type.new(np.eye(n_class)[obj_type]).float()   
-                inputs_dict['y_class'] = y_one_hot.to(device)
+            # if model.type == 'CVAE':
+            n_class = len(args.cates)
+            obj_type = data['cate_idx']
+            y_one_hot = obj_type.new(np.eye(n_class)[obj_type]).float()   
+            inputs_dict['y_class'] = y_one_hot.to(device)
                 
             ret = model(inputs_dict)
             x_reconst = ret['x_reconst']
@@ -81,11 +81,30 @@ def evaluate_model(model, dataset, args, init_seed=2019, batch_size=64):
         return total_reconstruct_loss / (bidx+1)
 
 
+def evaluate_classifer_model(model, dataset, args, init_seed=2019, batch_size=64):
+    total_classifier_loss = 0
+    model.eval()    
+    data_iter = torch.utils.data.DataLoader(
+                                dataset=dataset, 
+                                batch_size= batch_size, 
+                                shuffle=False,
+                                num_workers=0, 
+                                pin_memory=True, 
+                                drop_last=False,
+                                worker_init_fn=init_seed)
 
-
-    
-
-
-
-    
-    
+    with torch.no_grad():
+        for bidx, data in enumerate(data_iter):
+            idx_batch, tr_batch, te_batch = data['idx'], data['train_points'], data['test_points']
+            inputs = tr_batch.to(device)
+            inputs_dict = {'x':inputs}
+            n_class = len(args.cates)
+            obj_type = data['cate_idx']
+            y_one_hot = obj_type.new(np.eye(n_class)[obj_type]).float()   
+            inputs_dict['y_class'] = y_one_hot.to(device)
+            
+            ret = model(inputs_dict)
+            z_cl_loss = ret['z_cl_loss']
+            cur_z_cl_loss = z_cl_loss.cpu().item()
+            total_classifier_loss += cur_z_cl_loss
+        return total_classifier_loss / (bidx+1)

@@ -8,7 +8,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 import pudb
 
 class VAE(nn.Module):
-    def __init__(self,encoder,decoder,args):
+    def __init__(self,encoder,decoder,z_classifer,args):
         super(VAE, self).__init__()
         self.n_point = args.tr_max_sample_points
         self.point_dim = 3
@@ -24,7 +24,7 @@ class VAE(nn.Module):
             self.decoder = decoder(2 *self.z_dim,self.n_point,self.point_dim)
         else:
             self.decoder = decoder(self.z_dim,self.n_point,self.point_dim)
-           
+        self.z_classifer = z_classifer(2*self.z_dim, len(args.cates))
         #set prior parameters of the vae model p(z)
         self.z_prior_m = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
         self.z_prior_v = torch.nn.Parameter(torch.ones(1), requires_grad=False)
@@ -32,7 +32,8 @@ class VAE(nn.Module):
         self.type = 'VAE'
     
     def forward(self, inputs):
-        x = inputs['x']
+        ret = {}
+        x, y_class = inputs['x'], inputs['y_class']
         m, v = self.encoder(x)
         if self.use_deterministic_encoder:
             y = self.decoder(m)
@@ -57,8 +58,12 @@ class VAE(nn.Module):
             x_reconst = x_reconst.sum()
             kl_loss = kl_loss.sum()
         nelbo = x_reconst + kl_loss
-        
         ret = {'nelbo':nelbo, 'kl_loss':kl_loss, 'x_reconst':x_reconst}
+        # classifer network
+        mv = torch.cat((m,v),dim=1)
+        y_logits = self.z_classifer(mv)
+        z_cl_loss = self.z_classifer.cross_entropy_loss(y_logits,y_class)
+        ret['z_cl_loss'] = z_cl_loss
         return ret
     
 
