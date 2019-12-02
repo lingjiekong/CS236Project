@@ -73,7 +73,7 @@ def cal_coverage_mmd(sample_pcs,ref_pcs,batch_size,avg_type='sum'):
     all_dist = cal_pairwise_distance(sample_pcs,ref_pcs,batch_size,avg_type)
     N_sample = all_dist.size(0)
     N_ref = all_dist.size(1)
-    print("Evaluation data set: ",all_dist.shape,N_sample,N_ref)
+    #print("Evaluation data set: ",all_dist.shape,N_sample,N_ref)
     min_val_fromsmp, min_idx = torch.min(all_dist, dim=1)   # calculates the min distance of each samples with the all ref samples
     cov = float(min_idx.unique().view(-1).size(0)) / float(N_ref)
     cov = torch.tensor(cov).to(all_dist)

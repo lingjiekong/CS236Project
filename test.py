@@ -137,7 +137,7 @@ def eval_model_reconstruct(model,args,denormalize=True):
             gen_sample.append(samples)
         true_sample = torch.cat(true_sample,axis=0)
         gen_sample = torch.cat(gen_sample,axis=0)
-        compute_metrics(gen_sample[0:50,:,:],true_sample[0:50,:,:],args,denormalize,cal_cd_dist=True)
+        compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=True)
 
 #evaluate the generated data distribution with the true data dristribution
 def eval_model_random_sample(model,args,dtype='test',Nsamples=None,denormalize=True):
@@ -180,7 +180,7 @@ def eval_model_random_sample(model,args,dtype='test',Nsamples=None,denormalize=T
                 samples = samples * s + m
             gen_sample.append(samples)
         gen_sample = torch.cat(gen_sample,axis=0)
-        compute_metrics(gen_sample[0:100,:,:],true_sample[0:50,:,:],args,denormalize,cal_cd_dist=False)
+        compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=False)
 
 #calculates Covarage, Minimum Matching Distance , 1-st nearest neighbor and JS-Divergance between generated and true data distribution
 def compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=False):
