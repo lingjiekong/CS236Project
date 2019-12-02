@@ -106,7 +106,7 @@ def visualize_point_clouds(pts, gtr, idx, pert_order=[0, 1, 2]):
     plt.close()
     return res
 
-def visualize_point_clouds_4(pts_1, gtr_1, pts_2, gtr_2,idx_1, idx_2,pert_order=[0, 1, 2],tag=True):
+def visualize_point_clouds_4(pts_1, gtr_1, pts_2, gtr_2,idx_1, idx_2,loss1,loss2,pert_order=[0, 1, 2],tag=True):
     pts_1 = pts_1.cpu().detach().numpy()[:, pert_order]
     gtr_1 = gtr_1.cpu().detach().numpy()[:, pert_order]
     pts_2 = pts_2.cpu().detach().numpy()[:, pert_order]
@@ -126,9 +126,10 @@ def visualize_point_clouds_4(pts_1, gtr_1, pts_2, gtr_2,idx_1, idx_2,pert_order=
     ax4.scatter(gtr_2[:, 0], gtr_2[:, 1], gtr_2[:, 2], s=5)
 
     if tag:
-        ax1.set_title("Sample:%s" % idx_1)
+        ax1.set_title("Sample: {0:d}, CD Loss {1:6.3f}".format(idx_1,loss1))
         ax2.set_title("Ground Truth:%s" % idx_1)
-        ax3.set_title("Sample:%s" % idx_2)
+        #print(" visualize_point_clouds_4",loss1,loss2)
+        ax3.set_title("Sample: {0:d}, CD Loss {1:6.3f}".format(idx_2,loss2))
         ax4.set_title("Ground Truth:%s" % idx_2)
 
     fig.canvas.draw()
@@ -139,4 +140,5 @@ def visualize_point_clouds_4(pts_1, gtr_1, pts_2, gtr_2,idx_1, idx_2,pert_order=
 
     plt.close()
     return res
+
 
