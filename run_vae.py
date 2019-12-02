@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from args import get_args
 from models.vae import VAE
+from models.gmvae import GMVAE
 from models.networks import Encoder, MLP_Decoder, MLP_Conv_v1, MLP_Conv_v2, Classifier, ZClassifier
 from utils import set_random_seed
 from train import train
@@ -28,20 +29,26 @@ print("args.epochs",args.epochs,args.log_freq,args.random_rotate)
 encoder = Encoder
 decoder = MLP_Conv_v1  #MLP_Decoder
 z_classifer = ZClassifier
-model = VAE(encoder,decoder,z_classifer,args)
+# model = VAE(encoder,decoder,z_classifer,args)
+k = 10
+model = GMVAE(10, encoder, decoder, z_classifer, args)
 if device.type == 'cuda':
     model = model.cuda()
     
 #train model
 if args.train_model == 1:
-    args.log_name = "vae"
-    args.train_model_name = "vae"
+    # args.log_name = "vae"
+    # args.train_model_name = "vae"
+    args.log_name = "gmvae"
+    args.train_model_name = "gmvae"
     train(model,args)    
 
 #evaliuate a trained model
 if args.train_model == 0:
-    args.log_name = "vae"
-    args.train_model_name = "vae"
+    args.log_name = "gmvae"
+    args.train_model_name = "gmvae"
+    # args.log_name = "vae"
+    # args.train_model_name = "vae"
     args.resume_checkpoint='checkpoints/'+args.log_name+'/checkpoint-latest.pt'
     print("Resume Path:%s" % args.resume_checkpoint)
     checkpoint = torch.load(args.resume_checkpoint)
@@ -54,13 +61,17 @@ if args.train_model == 0:
 # train z classifier
 if args.train_model == 3:
     args.log_name = "classifier"
-    args.train_model_name = "vae"
+    args.train_model_name = "gmvae"
+    # args.log_name = "classifier"
+    # args.train_model_name = "vae"
     train(model,args)
 
 # eval z classifier
 if args.train_model == 2:
+    # args.log_name = "classifier"
+    # args.train_model_name = "vae"
     args.log_name = "classifier"
-    args.train_model_name = "vae"
+    args.train_model_name = "gmvae"
     args.resume_checkpoint='checkpoints/'+args.log_name+'/checkpoint-latest.pt'
     print("Resume Path:%s" % args.resume_checkpoint)
     checkpoint = torch.load(args.resume_checkpoint)
