@@ -47,9 +47,17 @@ class VAE(nn.Module):
             z =  ut.sample_gaussian(m,v)
             decoder_input = z if not self.use_encoding_in_decoder else \
             torch.cat((z,m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
-            decoder_input, log_jacobians = self.flow(decoder_input)
-            flow_loss = self.bound(decoder_input, log_jacobians)
-            y = self.decoder(decoder_input)
+            # decoder_input, log_jacobians = self.flow(decoder_input)
+            # flow_loss = self.bound(decoder_input, log_jacobians)
+            flow_decoder_input = torch.zeros_like(decoder_input)
+            for i in range(self.z_dim):
+                flow = self.flow[i]
+                single_input = decoder_input[:,i].unsqueeze(1)
+                single_output, log_jacobians = flow(single_input)
+                flow_decoder_input[:,i] = single_output.squeeze(1)
+                flow_loss += self.bound(single_output, log_jacobians)
+            flow_loss /= self.z_dim
+            y = self.decoder(flow_decoder_input)
             #compute KL divergence loss :
             p_m = self.z_prior[0].expand(m.size())
             p_v = self.z_prior[1].expand(v.size())

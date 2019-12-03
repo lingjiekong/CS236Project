@@ -22,7 +22,7 @@ args.batch_size = 16
 args.lr = 2e-3
 args.tr_max_sample_points = 2048
 args.data_dir="data/ShapeNetCore.v2.PC15k"
-args.loss_sum_mean = "mean" # can be also "mean"
+args.loss_sum_mean = "sum" # can be also "mean"
 args.use_flow = True
 
 set_random_seed(args.seed)
@@ -32,7 +32,11 @@ print("args.epochs",args.epochs,args.log_freq,args.random_rotate)
 encoder = Encoder
 decoder = MLP_Conv_v1  #MLP_Decoder
 z_classifer = ZClassifier
-flow = NormalizingFlow(dim=args.zdim, flow_length=10)
+if device.type == 'cuda':
+    flow = [NormalizingFlow(dim=1, flow_length=3).cuda() for _ in range(args.zdim)]
+else:
+    flow = [NormalizingFlow(dim=1, flow_length=3) for _ in range(args.zdim)]
+# flow = NormalizingFlow(dim=args.zdim, flow_length=3)
 model = VAE(encoder,decoder,z_classifer,flow,args)
 # k = 10
 # model = GMVAE(10, encoder, decoder, z_classifer, args)
