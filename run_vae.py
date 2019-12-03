@@ -22,7 +22,7 @@ args.batch_size = 16
 args.lr = 2e-3
 args.tr_max_sample_points = 2048
 args.data_dir="data/ShapeNetCore.v2.PC15k"
-args.loss_sum_mean = "sum" # can be also "mean"
+args.loss_sum_mean = "mean" # can be also "mean"
 args.use_flow = True
 
 set_random_seed(args.seed)
