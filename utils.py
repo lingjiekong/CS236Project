@@ -10,6 +10,9 @@ from mpl_toolkits.mplot3d import Axes3D
 from torch.nn import functional as F
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+def safe_log(z):
+    return torch.log(z + 1e-7)
+
 def sample_gaussian(m, v):
     epsilon = torch.normal(torch.zeros(m.size()),torch.ones(m.size())).to(device)
     z = m + torch.sqrt(v) * epsilon

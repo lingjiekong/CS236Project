@@ -6,12 +6,11 @@ import numpy as np
 from metrics.evaluation_metrics import CD_loss
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 import pudb
-from models.losses import FreeEnergyBound
-from models.densities import p_z
 
-class VAE(nn.Module):
-    def __init__(self,encoder,decoder,z_classifer,flow,args):
-        super(VAE, self).__init__()
+class GMVAE(nn.Module):
+    def __init__(self,k,encoder,decoder,z_classifer,args):
+        super(GMVAE, self).__init__()
+        self.k = k
         self.n_point = args.tr_max_sample_points
         self.point_dim = 3
         self.n_point_3 = self.point_dim * self.n_point 
@@ -21,48 +20,36 @@ class VAE(nn.Module):
         self.use_deterministic_encoder = args.use_deterministic_encoder
         self.use_encoding_in_decoder = args.use_encoding_in_decoder
         self.encoder = encoder(self.z_dim,self.point_dim,self.use_deterministic_encoder)
-        self.use_flow = args.use_flow
-        self.flow = flow
-        self.bound = FreeEnergyBound(density=p_z)
+        
         if not self.use_deterministic_encoder and self.use_encoding_in_decoder:
             self.decoder = decoder(2 *self.z_dim,self.n_point,self.point_dim)
         else:
             self.decoder = decoder(self.z_dim,self.n_point,self.point_dim)
         self.z_classifer = z_classifer(2*self.z_dim, len(args.cates))
-        #set prior parameters of the vae model p(z)
-        self.z_prior_m = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
-        self.z_prior_v = torch.nn.Parameter(torch.ones(1), requires_grad=False)
-        self.z_prior = (self.z_prior_m, self.z_prior_v)
-        self.type = 'VAE'
+        # Mixture of Gaussians prior
+        self.z_pre = torch.nn.Parameter(torch.randn(1, 2 * self.k, self.z_dim)
+                                        / np.sqrt(self.k * self.z_dim))
+        # Uniform weighting
+        self.pi = torch.nn.Parameter(torch.ones(k) / k, requires_grad=False)
+        self.type = 'GMVAE'
     
     def forward(self, inputs):
         ret = {}
         x, y_class = inputs['x'], inputs['y_class']
         m, v = self.encoder(x)
-        flow_loss = 0.0
+        # Compute the mixture of Gaussian prior
+        prior = ut.gaussian_parameters(self.z_pre, dim=1)
         if self.use_deterministic_encoder:
             y = self.decoder(m)
             kl_loss = torch.zeros(1)
-        elif self.use_flow:
-            z =  ut.sample_gaussian(m,v)
-            decoder_input = z if not self.use_encoding_in_decoder else \
-            torch.cat((z,m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
-            decoder_input, log_jacobians = self.flow(decoder_input)
-            flow_loss = self.bound(decoder_input, log_jacobians)
-            y = self.decoder(decoder_input)
-            #compute KL divergence loss :
-            p_m = self.z_prior[0].expand(m.size())
-            p_v = self.z_prior[1].expand(v.size())
-            kl_loss = ut.kl_normal(m,v,p_m,p_v)
         else:
             z =  ut.sample_gaussian(m,v)
             decoder_input = z if not self.use_encoding_in_decoder else \
             torch.cat((z,m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
             y = self.decoder(decoder_input)
             #compute KL divergence loss :
-            p_m = self.z_prior[0].expand(m.size())
-            p_v = self.z_prior[1].expand(v.size())
-            kl_loss = ut.kl_normal(m,v,p_m,p_v)
+            z_prior_m, z_prior_v = prior[0], prior[1]
+            kl_loss = ut.log_normal(z, m, v) - ut.log_normal_mixture(z, z_prior_m, z_prior_v)
         #compute reconstruction loss 
         if self.loss_type is 'chamfer':
             x_reconst = CD_loss(y,x)
@@ -73,8 +60,8 @@ class VAE(nn.Module):
         else:
             x_reconst = x_reconst.sum()
             kl_loss = kl_loss.sum()
-        nelbo = x_reconst + kl_loss + flow_loss
-        ret = {'nelbo':nelbo, 'kl_loss':kl_loss, 'x_reconst':x_reconst, 'flow_loss': flow_loss}
+        nelbo = x_reconst + kl_loss
+        ret = {'nelbo':nelbo, 'kl_loss':kl_loss, 'x_reconst':x_reconst}
         # classifer network
         mv = torch.cat((m,v),dim=1)
         y_logits = self.z_classifer(mv)
@@ -82,15 +69,22 @@ class VAE(nn.Module):
         ret['z_cl_loss'] = z_cl_loss
         return ret
     
-
     def sample_point(self,batch):
-        p_m = self.z_prior[0].expand(batch,self.z_dim).to(device)
-        p_v = self.z_prior[1].expand(batch,self.z_dim).to(device)
-        z =  ut.sample_gaussian(p_m,p_v)
+        m, v = ut.gaussian_parameters(self.z_pre.squeeze(0), dim=0)
+        idx = torch.distributions.categorical.Categorical(self.pi).sample((batch,))
+        m, v = m[idx], v[idx]
+        z = ut.sample_gaussian(m, v)
         decoder_input = z if not self.use_encoding_in_decoder else \
-        torch.cat((z,p_m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
-        y = self.decoder(decoder_input)
+        torch.cat((z,m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
+        y = self.sample_x_given(decoder_input)
         return y
+
+    def sample_x_given(self, z):
+        return torch.bernoulli(self.compute_sigmoid_given(z))
+
+    def compute_sigmoid_given(self, z):
+        logits = self.decoder(z)
+        return torch.sigmoid(logits)
 
     def reconstruct_input(self,x):
         m, v = self.encoder(x)
@@ -100,5 +94,5 @@ class VAE(nn.Module):
             z =  ut.sample_gaussian(m,v)
             decoder_input = z if not self.use_encoding_in_decoder else \
             torch.cat((z,m),dim=-1) #BUGBUG: Ideally the encodings before passing to mu and sigma should be here.
-            y = self.decoder(decoder_input)
+            y = self.sample_x_given(decoder_input)
         return y

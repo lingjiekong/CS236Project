@@ -89,6 +89,7 @@ def main_train_loop(save_dir,model,args):
     tot_kl_loss=[]
     tot_x_reconst=[]
     tot_z_cl_loss = []
+    tot_flow_loss = []
     
     best_eval_metric = float('+inf')
 
@@ -115,7 +116,7 @@ def main_train_loop(save_dir,model,args):
             inputs_dict = {'x':inputs, 'y_class':y_one_hot}
             ret = model(inputs_dict)
             if args.log_name != 'classifier':
-                nelbo, kl_loss, x_reconst = ret['nelbo'], ret['kl_loss'], ret['x_reconst']
+                nelbo, kl_loss, x_reconst, flow_loss = ret['nelbo'], ret['kl_loss'], ret['x_reconst'], ret['flow_loss']
                 nelbo.backward()
                 optimizer.step()
                 cur_nelbo= nelbo.cpu().item()
@@ -125,8 +126,8 @@ def main_train_loop(save_dir,model,args):
                 tot_kl_loss.append(cur_kl_loss)
                 tot_x_reconst.append(cur_x_reconst)
                 if step % args.log_freq == 0:
-                    print("Epoch {} Step {} Nelbo {} KL Loss {} Reconst Loss {}"
-                    .format(epoch,step,cur_nelbo,cur_kl_loss,cur_x_reconst))
+                    print("Epoch {} Step {} Nelbo {} KL Loss {} Reconst Loss {} Flow Loss {}"
+                    .format(epoch,step,cur_nelbo,cur_kl_loss,cur_x_reconst,flow_loss))
             else:
                 z_cl_loss = ret['z_cl_loss']
                 z_cl_loss.backward()
