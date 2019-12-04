@@ -11,18 +11,14 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 args = get_args()
 
-args.cates = ['airplane']     #chair
 args.zdim = 128
 args.batch_size = 16
 args.lr = 2e-3
-args.epochs = 1
 args.tr_max_sample_points = 2048
 args.data_dir="data/ShapeNetCore.v2.PC15k"
 args.loss_sum_mean = "mean" # can be also "mean"
 
 #args.random_rotate = True
-args.use_deterministic_encoder = False     #AE
-args.log_name = 'vae_model_mlp'
 #args.train_model = 1       #args.train_model=0 for evaluaton
 
 set_random_seed(args.seed)

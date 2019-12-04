@@ -330,8 +330,20 @@ def get_datasets(args):
             normalize_per_shape=args.normalize_per_shape,
             normalize_std_per_axis=args.normalize_std_per_axis,
             random_subsample=True)
-        te_dataset = ShapeNet15kPointClouds(
+        
+        val_dataset = ShapeNet15kPointClouds(
             categories=args.cates, split='val',
+            tr_sample_size=args.tr_max_sample_points,
+            te_sample_size=args.te_max_sample_points,
+            scale=args.dataset_scale, root_dir=args.data_dir,
+            normalize_per_shape=args.normalize_per_shape,
+            normalize_std_per_axis=args.normalize_std_per_axis,
+            all_points_mean=tr_dataset.all_points_mean,
+            all_points_std=tr_dataset.all_points_std,
+        )
+        
+        te_dataset = ShapeNet15kPointClouds(
+            categories=args.cates, split='test',
             tr_sample_size=args.tr_max_sample_points,
             te_sample_size=args.te_max_sample_points,
             scale=args.dataset_scale, root_dir=args.data_dir,
@@ -347,7 +359,7 @@ def get_datasets(args):
     else:
         raise Exception("Invalid dataset type:%s" % args.dataset_type)
 
-    return tr_dataset, te_dataset
+    return tr_dataset, val_dataset, te_dataset
 
 
 def get_clf_datasets(args):
@@ -358,13 +370,17 @@ def get_clf_datasets(args):
 
 
 def get_data_loaders(args):
-    tr_dataset, te_dataset = get_datasets(args)
+    tr_dataset, val_dataset, te_dataset = get_datasets(args)
     train_loader = data.DataLoader(
         dataset=tr_dataset, batch_size=args.batch_size,
         shuffle=True, num_workers=args.num_workers, drop_last=True,
         worker_init_fn=init_np_seed)
     train_unshuffle_loader = data.DataLoader(
         dataset=tr_dataset, batch_size=args.batch_size,
+        shuffle=False, num_workers=args.num_workers, drop_last=True,
+        worker_init_fn=init_np_seed)
+    val_loader = data.DataLoader(
+        dataset=val_dataset, batch_size=args.batch_size,
         shuffle=False, num_workers=args.num_workers, drop_last=True,
         worker_init_fn=init_np_seed)
     test_loader = data.DataLoader(
@@ -374,6 +390,7 @@ def get_data_loaders(args):
 
     loaders = {
         "test_loader": test_loader,
+        'val_loader' : val_loader,
         'train_loader': train_loader,
         'train_unshuffle_loader': train_unshuffle_loader,
     }

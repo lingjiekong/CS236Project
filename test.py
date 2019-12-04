@@ -16,20 +16,21 @@ from metrics.evaluation_metrics import cal_CD_distance,cal_coverage_mmd,cal_knn,
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def get_train_loader(args):
-    tr_dataset , _ = get_datasets(args)
+    tr_dataset,_ , _ = get_datasets(args)
     loader = torch.utils.data.DataLoader(
         dataset=tr_dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=0, pin_memory=True, drop_last=False)
     return loader
 
-def get_test_loader(args,init_seed=2019):
-    _,te_dataset = get_datasets(args)
+def get_test_loader(args,init_seed=2019, val = True):
+    _,val_dataset, te_dataset = get_datasets(args)
+    dataset = val_dataset if val else te_dataset
     loader = torch.utils.data.DataLoader(
-        dataset=te_dataset, batch_size=args.batch_size, shuffle=False,
+        dataset=dataset, batch_size=args.batch_size, shuffle=False,
         num_workers=0, pin_memory=True, drop_last=False,worker_init_fn=init_seed)
     return loader
 
-def viz_reconstruct(model,args,nset=2,dtype='test',viz_size=8 ):
+def viz_reconstruct(model,args,nset=2,dtype='val',viz_size=8 ):
     save_dir = "viz_reconstruct"
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
@@ -38,7 +39,7 @@ def viz_reconstruct(model,args,nset=2,dtype='test',viz_size=8 ):
     if dtype=='train':
         loader = get_train_loader(args)
     else:
-        loader = get_test_loader(args)
+        loader = get_test_loader(args, val = dtype == 'val')
     with torch.no_grad():
         loss=[]
         data_num=0
@@ -117,16 +118,25 @@ def evaluate_model(model, dataset, args, init_seed=2019, batch_size=64):
         return total_reconstruct_loss / (bidx+1)
 
 #evaluate the reconstructed data distribution with the true data dristribution
-def eval_model_reconstruct(model,args,denormalize=True):
+def eval_model_reconstruct(model,args,dtype='val',denormalize=True):
     model.eval()
-    loader = get_test_loader(args)
+    
+    if dtype=='train':
+        loader = get_train_loader(args)
+    else:
+        loader = get_test_loader(args, val = dtype == 'val')
+    
     true_sample = []
     gen_sample = []
     print("args.resume_dataset_mean:",args.resume_dataset_mean)
     with torch.no_grad():
         for data in loader:
             idx_b, tr_pc, te_pc = data['idx'], data['train_points'], data['test_points']
+            tr_pc = tr_pc.to(device)
+            te_pc = te_pc.to(device)
+            #pudb.set_trace()
             samples = model.reconstruct_input(te_pc)
+
             if denormalize==True:                         #denormalize = True is required for computing JS-Divergence (makes data between 0-1)
                 m, s = data['mean'].float(), data['std'].float()
                 m = m.to(device)
@@ -135,17 +145,17 @@ def eval_model_reconstruct(model,args,denormalize=True):
                 samples = samples * s + m
             true_sample.append(te_pc)
             gen_sample.append(samples)
-        true_sample = torch.cat(true_sample,axis=0)
-        gen_sample = torch.cat(gen_sample,axis=0)
-        compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=True)
-
+        true_sample = torch.cat(true_sample,dim=0)
+        gen_sample = torch.cat(gen_sample,dim=0)
+        metrics = compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=True)
+    return metrics
 #evaluate the generated data distribution with the true data dristribution
-def eval_model_random_sample(model,args,dtype='test',Nsamples=None,denormalize=True):
+def eval_model_random_sample(model,args,dtype='val',Nsamples=None,denormalize=True):
     model.eval()
     if dtype=='train':
         loader = get_train_loader(args)
     else:
-        loader = get_test_loader(args)
+        loader = get_test_loader(args, val = dtype == 'val')
     true_sample = []
     gen_sample = []
     m_all = []
@@ -153,6 +163,8 @@ def eval_model_random_sample(model,args,dtype='test',Nsamples=None,denormalize=T
     with torch.no_grad():
         for data in loader:
             idx_b, tr_pc, te_pc = data['idx'], data['train_points'], data['test_points']
+            tr_pc = tr_pc.to(device)
+            te_pc = te_pc.to(device)
             if denormalize == True:                 #denormalize = True is required for computing JS-Divergence (makes data between 0-1)
                 m, s = data['mean'].float(), data['std'].float()
                 m = m.to(device)
@@ -161,10 +173,10 @@ def eval_model_random_sample(model,args,dtype='test',Nsamples=None,denormalize=T
                 s_all.append(s)
                 te_pc = te_pc * s + m
             true_sample.append(te_pc)
-        true_sample = torch.cat(true_sample,axis=0)
+        true_sample = torch.cat(true_sample,dim=0)
         if denormalize == True:
-            m_all = torch.cat(m_all,axis=0)
-            s_all = torch.cat(s_all,axis=0)
+            m_all = torch.cat(m_all,dim=0)
+            s_all = torch.cat(s_all,dim=0)
         if Nsamples==None:
             Nsamples = true_sample.size(0)
         for ii in range(0,Nsamples,args.batch_size):
@@ -179,11 +191,13 @@ def eval_model_random_sample(model,args,dtype='test',Nsamples=None,denormalize=T
                     s = s_all[0:min(args.batch_size,Nsamples-ii)]
                 samples = samples * s + m
             gen_sample.append(samples)
-        gen_sample = torch.cat(gen_sample,axis=0)
-        compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=False)
+        gen_sample = torch.cat(gen_sample,dim=0)
+        metrics = compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=False)
+    return metrics
 
 #calculates Covarage, Minimum Matching Distance , 1-st nearest neighbor and JS-Divergance between generated and true data distribution
 def compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=False):
+    metrics = dict()
     N_sample = gen_sample.shape[0]
     N_ref = true_sample.shape[0]
     print("No. of gen samples: ",gen_sample.shape)
@@ -193,25 +207,35 @@ def compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=False):
         print ("=========Reconstruction loss using CD Distsance ==========")
         ret = cal_CD_distance(gen_sample,true_sample,args.batch_size)
         print("mean and std distance: ",ret['mean_dist'],ret['std_dist'])
-    print("=======Calculate Covrage and Minimum Matching Distance=======")
+        metrics['CD'] = {'mean':ret['mean_dist'], 'std' : ret['std_dist']}
+    print("=======Calculate Coverage and Minimum Matching Distance=======")
     ret = cal_coverage_mmd(gen_sample,true_sample,args.batch_size)
     print("Coverage {} , mean distance {}, std {}".format(ret['cov'],ret['cov_dist_mean'],ret['cov_dist_std']))
+    metrics['Coverage'] = {'val': ret['cov'], 'mean' : ret['cov_dist_mean'], 'std':ret['cov_dist_std']}
     print('Minimum Matching Distance {}'.format(ret['mmd']))
-    if (N_sample==N_ref):
-        print("=====calculate 1st-nearest neighbor metric=====")  # we want value closer to 0.5
-        ret = cal_knn(gen_sample,true_sample,args.batch_size)
-        print("1st-nearest neighbor's accuracy {}".format(ret['knn']))
+    metrics['mmd'] = ret['mmd']
+#     if (N_sample==N_ref):
+#         print("=====calculate 1st-nearest neighbor metric=====")  # we want value closer to 0.5
+#         ret = cal_knn(gen_sample,true_sample,args.batch_size)
+#         print("1st-nearest neighbor's accuracy {}".format(ret['knn']))
     if denormalize == True:
         print("====Calculate JSD between point clouds=====")
         jsd = jsd_between_point_cloud_sets(gen_sample,true_sample)
         print("jsd: ",jsd)
-    return
+        metrics['jsd'] = jsd
+    
+    return metrics
 
 #compute nelbo of the model on test data
-def cal_nelbo_samples(model,args):
+def cal_nelbo_samples(model,args, dtype='val'):
+    metrics = dict()
     temp_var=args.batch_size
     args.batch_size=1
-    loader = get_test_loader(args)
+    if dtype == 'train':
+        loader = get_train_loader(args)
+    else:
+        loader = get_test_loader(args, val = dtype == 'val')
+        
     loss=[]
     model.eval()
     kl_loss=[]
@@ -236,13 +260,16 @@ def cal_nelbo_samples(model,args):
     kl_loss=np.asarray(kl_loss).reshape(-1)
     rec_loss=np.asarray(rec_loss).reshape(-1)
     print("======Likelihood of the model on test data========")
-    print("Numboer of test examples: ",nelbo.shape)
+    print("Number of test examples: ",nelbo.shape)
     avg_nelbo, std_nelbo =nelbo.mean(),nelbo.std()
-    avg_kl_loss, std__kl_loss = kl_loss.mean(),kl_loss.std()
-    avg_rec_loss, std__rec_loss =rec_loss.mean(), rec_loss.std()
+    avg_kl_loss, std_kl_loss = kl_loss.mean(),kl_loss.std()
+    avg_rec_loss, std_rec_loss =rec_loss.mean(), rec_loss.std()
     print("Nelbo: mean {} std {} minimum {} maximum {}".format(avg_nelbo, std_nelbo,np.min(nelbo),np.max(nelbo)))
-    print("kl_loss  mean {} std {} minimum {} maximum {} ".format(avg_kl_loss, std__kl_loss,np.min(kl_loss),np.max(kl_loss)))
-    print("Rec_loss  mean {} std {} minimum {} maximum {}".format(avg_kl_loss, std__kl_loss,np.min(rec_loss),np.max(rec_loss)))
+    metrics['nelbo'] = {'avg':avg_nelbo, 'std':std_nelbo}
+    print("kl_loss  mean {} std {} minimum {} maximum {} ".format(avg_kl_loss, std_kl_loss,np.min(kl_loss),np.max(kl_loss)))
+    metrics['kl'] = {'avg':avg_kl_loss, 'std':std_kl_loss}
+    print("Rec_loss  mean {} std {} minimum {} maximum {}".format(avg_rec_loss, std_rec_loss,np.min(rec_loss),np.max(rec_loss)))
+    metrics['reconstruction'] = {'avg':avg_rec_loss, 'std':std_rec_loss}
     plt.figure()
     plt.title("NELBO Histogram")
     plt.hist(nelbo,bins=20)
@@ -255,3 +282,4 @@ def cal_nelbo_samples(model,args):
     plt.title("Reconstruction loss Histogram")
     plt.hist(rec_loss,bins=20)
     plt.savefig("Rec_loss")
+    return metrics

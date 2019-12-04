@@ -9,7 +9,7 @@ import random
 import warnings
 from utils import set_random_seed,visualize_point_clouds,save,resume
 from utils import apply_random_rotation
-from test import evaluate_model
+from test import evaluate_model, eval_model_reconstruct, eval_model_random_sample,cal_nelbo_samples
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
 
@@ -42,7 +42,7 @@ def main_train_loop(save_dir,model,args):
         print('Resumed from: ' + args.resume_checkpoint)
     
     #initilize dataset and load
-    tr_dataset, te_dataset = get_datasets(args)
+    tr_dataset, val_dataset, te_dataset = get_datasets(args)
 
     train_sampler = None   # for non distributed training
 
@@ -50,11 +50,6 @@ def main_train_loop(save_dir,model,args):
         dataset=tr_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=0, pin_memory=True, sampler=train_sampler, drop_last=True,
         worker_init_fn=init_np_seed)
-    test_loader = torch.utils.data.DataLoader(
-        dataset=te_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=0, pin_memory=True, drop_last=False,
-        worker_init_fn=init_np_seed)
-    
     #initialize the learning rate scheduler
     if args.scheduler == 'exponential':
         scheduler = optim.lr_scheduler.ExponentialLR(optimizer, args.exp_decay)
@@ -113,7 +108,7 @@ def main_train_loop(save_dir,model,args):
         if (epoch + 1) % args.save_freq == 0:
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-%d.pt' % epoch))
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-latest.pt'))
-            eval_metric = evaluate_model(model, te_dataset, args)
+            eval_metric = evaluate_model(model, val_dataset, args)
             train_metric = evaluate_model(model, tr_dataset, args)
             print('Checkpoint: Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric))
             if eval_metric < best_eval_metric:
@@ -139,10 +134,39 @@ def main_train_loop(save_dir,model,args):
     best_model_path = os.path.join(save_dir, 'checkpoint-best.pt')
     ckpt = torch.load(best_model_path)
     model.load_state_dict(ckpt['model'], strict=True)
-    eval_metric = evaluate_model(model, te_dataset, args)
+    eval_metric = evaluate_model(model, val_dataset, args)
     train_metric = evaluate_model(model, tr_dataset, args)
+    test_metric = evaluate_model(model, te_dataset, args)
+
+    print('##### Performance of the Best Model #######')
+    print('##### Metrics on Training Set:#####')
+    print('##### Reconstruction Metrics #######')
+    eval_model_reconstruct(model, args, dtype='val')
+    if not model.use_deterministic_encoder:
+        print('##### Generative Metrics #######')
+        eval_model_random_sample(model, args, dtype='val')
+        cal_nelbo_samples(model, args, dtype='val')
     print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
-            
+    
+    print('##### Metrics on Validation Set:#####')
+    print('##### Reconstruction Metrics #######')
+    eval_model_reconstruct(model, args, dtype='val')
+    if not model.use_deterministic_encoder:
+        print('##### Generative Metrics #######')
+        eval_model_random_sample(model, args, dtype='val')
+        cal_nelbo_samples(model, args, dtype='val')
+    print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
+    
+
+    print('##### Metrics on Test Set:#####')
+    print('##### Reconstruction Metrics #######')
+    eval_model_reconstruct(model, args, dtype='test')
+    if not model.use_deterministic_encoder:
+        print('##### Generative Metrics #######')
+        eval_model_random_sample(model, args, dtype='test') 
+        cal_nelbo_samples(model, args, dtype='test')
+    print('Best model at epoch:{1} Test set Reconst Loss:{0}'.format(test_metric, ckpt['epoch']))
+           
 def train(model,args):
     save_dir = os.path.join("checkpoints", args.log_name)
     if not os.path.exists(save_dir):
