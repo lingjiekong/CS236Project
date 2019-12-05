@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from args import get_args
 from models.vae import VAE
-from models.networks import Encoder, MLP_Decoder, MLP_Conv_v1, MLP_Conv_v2
+from models.networks import Encoder, MLP_Decoder, autoregressive_decoder, autoregressive_decoder_multi, autoregressive_decoder_multi_decoder
 from utils import set_random_seed
 from train import train
 from test  import viz_reconstruct, sample_structure, eval_model_reconstruct ,eval_model_random_sample,cal_nelbo_samples
@@ -27,6 +27,8 @@ print("epochs log_freq  random_rotate",args.epochs,args.log_freq,args.random_rot
 
 encoder = Encoder
 decoder = MLP_Decoder
+#decoder = autoregressive_decoder
+#decoder = autoregressive_decoder_multi_decoder
     
 model = VAE(encoder,decoder,args)
 
