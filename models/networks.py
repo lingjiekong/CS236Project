@@ -193,6 +193,189 @@ class MLP_Conv_v2(nn.Module):
 
 
 
+#encoder design for decoder 
+#input pointset is 1024
+class Decoder_condtional_x(nn.Module):
+    def __init__(self, zdim, input_dim=3):
+        super(Decoder_condtional_x, self).__init__()
+        self.zdim = zdim
+        self.conv1 = nn.Conv1d(input_dim, 128, 1)
+        self.conv2 = nn.Conv1d(128, 128, 1)
+        self.conv3 = nn.Conv1d(128, 256, 1)
+        self.conv4 = nn.Conv1d(256, 512, 1)
+        self.bn1 = nn.BatchNorm1d(128)
+        self.bn2 = nn.BatchNorm1d(128)
+        self.bn3 = nn.BatchNorm1d(256)
+        self.bn4 = nn.BatchNorm1d(512)
+
+        #get the compressed z-vector for the input point cloud
+        self.fc1 = nn.Linear(512, 256)
+        self.fc2 = nn.Linear(256, 128)
+        self.fc_bn1 = nn.BatchNorm1d(256)
+        self.fc_bn2 = nn.BatchNorm1d(128)
+        self.fc3 = nn.Linear(128, zdim)
+
+    def forward(self, x):
+        x = x.transpose(1, 2)
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = self.bn4(self.conv4(x))
+        x = torch.max(x, 2, keepdim=True)[0]
+        x = x.view(-1, 512)
+
+        m = F.relu(self.fc_bn1(self.fc1(x)))
+        m = F.relu(self.fc_bn2(self.fc2(m)))
+        m = self.fc3(m)
+        return m
+
+#only partition input 2048 points into 2 sets of 1024 points
+class autoregressive_decoder(nn.Module):
+    def __init__(self,zdim,n_point,point_dim,add_latent_var=True):
+        super(autoregressive_decoder,self).__init__()
+        self.zdim = zdim
+        self.n_point = int(n_point/2)
+        self.point_dim = point_dim
+        self.n_point_3 = self.point_dim * self.n_point
+        self.decoder_0 = MLP_Decoder(self.zdim,self.n_point,self.point_dim)
+        self.encoder = Decoder_condtional_x(self.zdim,self.point_dim)
+        self.add_latent_var = add_latent_var
+        if self.add_latent_var == True:
+            self.decoder_1 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        else:
+            self.decoder_1 = MLP_Decoder(self.zdim,self.n_point,self.point_dim)
+    def forward(self,z):
+        x_0 = self.decoder_0(z)
+        z_0 = self.encoder(x_0)
+        if self.add_latent_var == True:
+            z_1 = torch.cat([z,z_0],dim=1)
+        else:
+            z_1 = z_0
+        x_1 = self.decoder_1(z_1)
+        x = torch.cat([x_0,x_1],dim=1)
+        return x
+
+#partition input 2048 points into m groups each with set of n_i points
+class autoregressive_decoder_multi(nn.Module):
+    def __init__(self,zdim,n_point,point_dim,point_group=8,add_latent_var=True):
+        super(autoregressive_decoder_multi,self).__init__()
+        self.zdim = zdim
+        self.point_group = point_group
+        self.n_point = int(n_point/self.point_group)
+        self.point_dim = point_dim
+        self.n_point_3 = self.point_dim * self.n_point
+        self.decoder_0 = MLP_Decoder(self.zdim,self.n_point,self.point_dim)
+        self.encoder = Decoder_condtional_x(self.zdim,self.point_dim)
+        self.add_latent_var = add_latent_var
+        if self.add_latent_var == True:
+            self.decoder_1 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        else:
+            self.decoder_1 = MLP_Decoder(self.zdim,self.n_point,self.point_dim)
+    def forward(self,z):
+        x = self.decoder_0(z)
+        z_0 = self.encoder(x)
+        for i in range(self.point_group-1):
+            if self.add_latent_var == True:
+                z_1 = torch.cat([z,z_0],dim=1)
+            else:
+                z_1 = z_0
+            x_1 = self.decoder_1(z_1)
+            z_2 = self.encoder(x_1)
+            z_0 = z_1[:,self.zdim:] + z_2 
+            x = torch.cat([x,x_1],dim=1)
+            #print("x:",x.shape,self.point_group,self.n_point)
+        #print("x final:",x.shape,self.point_group,self.n_point)
+        #exit(1)
+        return x
+
+#partition input 2048 points into m groups each with set of n_i points
+class autoregressive_decoder_multi_decoder(nn.Module):
+    def __init__(self,zdim,n_point,point_dim,point_group=8,add_latent_var=True):
+        super(autoregressive_decoder_multi_decoder,self).__init__()
+        self.zdim = zdim
+        self.point_group = point_group
+        self.n_point = int(n_point/self.point_group)
+        self.point_dim = point_dim
+        self.n_point_3 = self.point_dim * self.n_point
+        self.decoder_0 = MLP_Decoder(self.zdim,self.n_point,self.point_dim)
+        self.encoder = Decoder_condtional_x(self.zdim,self.point_dim)
+        self.add_latent_var = add_latent_var
+
+        self.decoder_1_1 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        self.decoder_1_2 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        self.decoder_1_3 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        self.decoder_1_4 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        self.decoder_1_5 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        self.decoder_1_6 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        self.decoder_1_7 = MLP_Decoder(2*self.zdim,self.n_point,self.point_dim)
+        
+    def forward(self,z):
+        x = self.decoder_0(z)
+        z_0 = self.encoder(x)
+
+        z_1 = torch.cat([z,z_0],dim=1)
+        x_1 = self.decoder_1_1(z_1)
+        z_2 = self.encoder(x_1)
+        z_0 = z_1[:,self.zdim:] + z_2 
+        x = torch.cat([x,x_1],dim=1)
+
+        z_1 = torch.cat([z,z_0],dim=1)
+        x_1 = self.decoder_1_2(z_1)
+        z_2 = self.encoder(x_1)
+        z_0 = z_1[:,self.zdim:] + z_2 
+        x = torch.cat([x,x_1],dim=1)
+
+        z_1 = torch.cat([z,z_0],dim=1)
+        x_1 = self.decoder_1_3(z_1)
+        z_2 = self.encoder(x_1)
+        z_0 = z_1[:,self.zdim:] + z_2 
+        x = torch.cat([x,x_1],dim=1)
+
+        z_1 = torch.cat([z,z_0],dim=1)
+        x_1 = self.decoder_1_4(z_1)
+        z_2 = self.encoder(x_1)
+        z_0 = z_1[:,self.zdim:] + z_2 
+        x = torch.cat([x,x_1],dim=1)
+
+        z_1 = torch.cat([z,z_0],dim=1)
+        x_1 = self.decoder_1_5(z_1)
+        z_2 = self.encoder(x_1)
+        z_0 = z_1[:,self.zdim:] + z_2 
+        x = torch.cat([x,x_1],dim=1)
+
+        z_1 = torch.cat([z,z_0],dim=1)
+        x_1 = self.decoder_1_6(z_1)
+        z_2 = self.encoder(x_1)
+        z_0 = z_1[:,self.zdim:] + z_2 
+        x = torch.cat([x,x_1],dim=1)
+
+        z_1 = torch.cat([z,z_0],dim=1)
+        x_1 = self.decoder_1_7(z_1)
+        z_2 = self.encoder(x_1)
+        z_0 = z_1[:,self.zdim:] + z_2 
+        x = torch.cat([x,x_1],dim=1)
+
+
+            #print("x:",x.shape,self.point_group,self.n_point)
+        #print("x final:",x.shape,self.point_group,self.n_point)
+        #exit(1)
+        return x
+
+#    def forward(self,z):
+#        x = self.decoder_0(z)
+#        for i in range(self.point_group-1):
+#            z_0 = self.encoder(x)
+#            if self.add_latent_var == True:
+#                z_1 = torch.cat([z,z_0],dim=1)
+#            else:
+#                z_1 = z_0
+#            x_1 = self.decoder_1(z_1)
+#            x = torch.cat([x,x_1],dim=1)
+#        return x
+
+
+
+
 
 
 
