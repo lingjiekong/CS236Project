@@ -12,6 +12,7 @@ from matplotlib.pyplot import imsave
 import matplotlib.pyplot as plt
 import random
 from metrics.evaluation_metrics import cal_CD_distance,cal_coverage_mmd,cal_knn,jsd_between_point_cloud_sets
+import pudb
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -230,7 +231,6 @@ def compute_metrics(gen_sample,true_sample,args,denormalize,cal_cd_dist=False):
 def cal_nelbo_samples(model,args, dtype='val'):
     metrics = dict()
     temp_var=args.batch_size
-    args.batch_size=1
     if dtype == 'train':
         loader = get_train_loader(args)
     else:

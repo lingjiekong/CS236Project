@@ -12,6 +12,7 @@ from utils import apply_random_rotation
 from test import evaluate_model, eval_model_reconstruct, eval_model_random_sample,cal_nelbo_samples
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
+import pudb
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -108,6 +109,7 @@ def main_train_loop(save_dir,model,args):
         if (epoch + 1) % args.save_freq == 0:
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-%d.pt' % epoch))
             save(model, optimizer, epoch + 1,os.path.join(save_dir, 'checkpoint-latest.pt'))
+            #pudb.set_trace()
             eval_metric = evaluate_model(model, val_dataset, args)
             train_metric = evaluate_model(model, tr_dataset, args)
             print('Checkpoint: Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric))
@@ -141,30 +143,33 @@ def main_train_loop(save_dir,model,args):
     print('##### Performance of the Best Model #######')
     print('##### Metrics on Training Set:#####')
     print('##### Reconstruction Metrics #######')
-    eval_model_reconstruct(model, args, dtype='val')
+    eval_model_reconstruct(model, args, dtype='train')
+    cal_nelbo_samples(model, args, dtype='train')
+
     if not model.use_deterministic_encoder:
         print('##### Generative Metrics #######')
-        eval_model_random_sample(model, args, dtype='val')
-        cal_nelbo_samples(model, args, dtype='val')
+        eval_model_random_sample(model, args, dtype='train')
     print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
     
     print('##### Metrics on Validation Set:#####')
     print('##### Reconstruction Metrics #######')
     eval_model_reconstruct(model, args, dtype='val')
+    cal_nelbo_samples(model, args, dtype='val')
+
     if not model.use_deterministic_encoder:
         print('##### Generative Metrics #######')
         eval_model_random_sample(model, args, dtype='val')
-        cal_nelbo_samples(model, args, dtype='val')
     print('Best model at epoch:{2} Dev Reconst Loss:{0}, Train Reconst Loss:{1}'.format(eval_metric, train_metric, ckpt['epoch']))
     
 
     print('##### Metrics on Test Set:#####')
     print('##### Reconstruction Metrics #######')
     eval_model_reconstruct(model, args, dtype='test')
+    cal_nelbo_samples(model, args, dtype='test')
+
     if not model.use_deterministic_encoder:
         print('##### Generative Metrics #######')
         eval_model_random_sample(model, args, dtype='test') 
-        cal_nelbo_samples(model, args, dtype='test')
     print('Best model at epoch:{1} Test set Reconst Loss:{0}'.format(test_metric, ckpt['epoch']))
            
 def train(model,args):

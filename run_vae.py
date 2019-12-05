@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from args import get_args
 from models.vae import VAE
-from models.networks import Encoder, MLP_Decoder, MLP_Conv_v1, MLP_Conv_v2
+from models.networks import Encoder, MLP_Decoder, MLP_Conv_v1, MLP_Conv_v2, TransformerEncoder
 from utils import set_random_seed
 from train import train
 from test  import viz_reconstruct, sample_structure, eval_model_reconstruct ,eval_model_random_sample,cal_nelbo_samples
@@ -12,7 +12,6 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 args = get_args()
 
 args.zdim = 128
-args.batch_size = 16
 args.lr = 2e-3
 args.tr_max_sample_points = 2048
 args.data_dir="data/ShapeNetCore.v2.PC15k"
@@ -25,7 +24,13 @@ set_random_seed(args.seed)
 
 print("epochs log_freq  random_rotate",args.epochs,args.log_freq,args.random_rotate)
 
-encoder = Encoder
+if args.encoder == 'transformer':
+	encoder = TransformerEncoder
+elif args.encoder == 'mlp':
+	encoder = Encoder
+else:
+	raise Exception('Invalid encoder type:{0}'.format(args.encoder))
+	
 decoder = MLP_Decoder
     
 model = VAE(encoder,decoder,args)
