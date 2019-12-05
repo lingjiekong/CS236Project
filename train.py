@@ -89,20 +89,22 @@ def main_train_loop(save_dir,model,args):
             optimizer.zero_grad()
             inputs_dict = {'x':inputs}
             ret = model(inputs_dict)
-            nelbo, kl_loss, x_reconst = ret['nelbo'], ret['kl_loss'], ret['x_reconst']
+            nelbo, kl_loss, x_reconst, flow_loss, log_prior_z_T = ret['nelbo'], ret['kl_loss'], ret['x_reconst'], ret['flow_loss'], ret['log_prior_z_T']
             nelbo.backward()
             optimizer.step()
 
             cur_nelbo= nelbo.cpu().item()
             cur_kl_loss = kl_loss.cpu().item()
             cur_x_reconst = x_reconst.cpu().item()
+            cur_flow_loss = flow_loss.cpu().item()
+            cur_log_prior_z_T = log_prior_z_T.cpu().item()
             tot_nelbo.append(cur_nelbo)
             tot_kl_loss.append(cur_kl_loss)
             tot_x_reconst.append(cur_x_reconst)
             
             if step % args.log_freq == 0:
-                print("Epoch {} Step {} Nelbo {} KL Loss {} Reconst Loss {}"
-                .format(epoch,step,cur_nelbo,cur_kl_loss,cur_x_reconst))
+                print("Epoch {} Step {} Nelbo {} KL Loss {} Reconst Loss {} Flow_Loss {} log_p_z {}"
+                .format(epoch,step,cur_nelbo,cur_kl_loss,cur_x_reconst,cur_flow_loss,cur_log_prior_z_T))
         
         #save checkpoint
         if (epoch + 1) % args.save_freq == 0:
