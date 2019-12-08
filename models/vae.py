@@ -14,7 +14,7 @@ class VAE(nn.Module):
         self.point_dim = 3
         self.n_point_3 = self.point_dim * self.n_point 
         self.z_dim = args.zdim
-        self.loss_type = 'chamfer'
+        self.loss_type = 'indepedent' #'chamfer'
         self.loss_sum_mean = args.loss_sum_mean
         self.use_deterministic_encoder = args.use_deterministic_encoder
         self.use_encoding_in_decoder = args.use_encoding_in_decoder
@@ -30,6 +30,7 @@ class VAE(nn.Module):
         self.z_prior_v = torch.nn.Parameter(torch.ones(1), requires_grad=False)
         self.z_prior = (self.z_prior_m, self.z_prior_v)
         self.type = 'VAE'
+        self.mse_loss = torch.nn.MSELoss(reduction='none')
     
     def forward(self, inputs):
         x = inputs['x']
@@ -49,6 +50,10 @@ class VAE(nn.Module):
         #compute reconstruction loss 
         if self.loss_type is 'chamfer':
             x_reconst = CD_loss(y,x)
+        if self.loss_type is 'indepedent':
+            x_reconst= self.mse_loss(y,x).sum(-1).sum(-1)
+            #print("x_reconst: ",x_reconst.shape)
+            #exit(1)
         # mean or sum
         if self.loss_sum_mean == "mean":
             x_reconst = x_reconst.mean()

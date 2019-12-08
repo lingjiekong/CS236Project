@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 import numpy as np
-import pudb
+#import pudb
 #simple encodr design
 class Encoder(nn.Module):
     def __init__(self, zdim, input_dim=3, use_deterministic_encoder=False):
@@ -146,49 +146,36 @@ class MLP_Decoder(nn.Module):
         x = F.relu(self.fc2(x))
         output  =  self.final(x)
         output = output.reshape(-1,self.n_point,self.point_dim)
+        print("output: ",output.shape)
         return output
 
-class MLP_Conv_v1(nn.Module):
-    def __init__(self,zdim,n_point,point_dim):
-        super(MLP_Conv_v1,self).__init__()
+
+#conditonal independent decoder
+class MLP_Decoder_C(nn.Module):
+    def __init__(self,zdim,n_point,point_dim,n_repeat=1):
+        super(MLP_Decoder_C,self).__init__()
         self.zdim = zdim
         self.n_point = n_point
         self.point_dim = point_dim
-        self.n_point_3 = self.point_dim * self.n_point
+        self.n_repeat = n_repeat
+        self.samples = self.n_repeat * self.n_point
         self.fc1 = nn.Linear(self.zdim, 256)
         self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, self.n_point_3)
-        self.conv1 = nn.Conv1d(self.point_dim, 64, 1)
-        self.bn1 = nn.BatchNorm1d(64)
-        self.conv2 = nn.Conv1d(64, self.point_dim, 1)
+        self.final = nn.Linear(256,self.point_dim)
+    
     def forward(self,z):
+        #print("Ori: z",z.shape)
+        z=z.transpose(1,0)
+        #print("trans: z",z.shape)
+        z=z.expand(self.samples , *z.shape).reshape(-1, *z.shape[1:])
+        #print("expand: z",z.shape)
+        z=z.transpose(0,1).reshape(-1,self.zdim,self.samples).transpose(2,1)
+        #print("Back: z",z.shape)
         x = F.relu(self.fc1(z))
         x = F.relu(self.fc2(x))
-        x = F.relu(self.fc3(x))
-        x = x.reshape(-1,self.point_dim,self.n_point)
-        x = F.relu(self.bn1(self.conv1(x)))
-        output = self.conv2(x).transpose(1,2)
-        return output
-
-class MLP_Conv_v2(nn.Module):
-    def __init__(self,zdim,n_point,point_dim):
-        super(MLP_Conv_v2,self).__init__()
-        self.zdim = zdim
-        self.n_point = n_point
-        self.point_dim = point_dim
-        self.n_point_3 = self.point_dim * self.n_point
-        self.fc1 = nn.Linear(self.zdim, self.n_point_3)
-        self.conv1 = nn.Conv1d(self.point_dim, 256, 1)
-        self.conv2 = nn.Conv1d(256, 128, 1)
-        self.conv3 = nn.Conv1d(128, self.point_dim, 1)
-        self.bn1 = nn.BatchNorm1d(256)
-        self.bn2 = nn.BatchNorm1d(128)
-    def forward(self,z):
-        x = F.relu(self.fc1(z))
-        x = x.reshape(-1,self.point_dim,self.n_point)
-        x = F.relu(self.bn1(self.conv1(x)))
-        x = F.relu(self.bn2(self.conv2(x)))
-        output = self.conv3(x).transpose(1,2)
+        output  =  self.final(x)
+        output = output.reshape(-1,self.n_point,self.point_dim)
+        #print("output: ",output.shape)
         return output
 
 

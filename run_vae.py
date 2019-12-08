@@ -2,7 +2,8 @@ import torch
 import numpy as np
 from args import get_args
 from models.vae import VAE
-from models.networks import Encoder, MLP_Decoder, autoregressive_decoder, autoregressive_decoder_multi, autoregressive_decoder_multi_decoder, TransformerEncoder
+from models.networks import Encoder, MLP_Decoder, autoregressive_decoder, autoregressive_decoder_multi, autoregressive_decoder_multi_decoder
+from models.networks import MLP_Decoder_C
 from utils import set_random_seed
 from train import train
 from test  import viz_reconstruct, sample_structure, eval_model_reconstruct ,eval_model_random_sample,cal_nelbo_samples
@@ -24,14 +25,8 @@ set_random_seed(args.seed)
 
 print("epochs log_freq  random_rotate",args.epochs,args.log_freq,args.random_rotate)
 
-if args.encoder == 'transformer':
-	encoder = TransformerEncoder
-elif args.encoder == 'mlp':
-	encoder = Encoder
-else:
-	raise Exception('Invalid encoder type:{0}'.format(args.encoder))
-	
-decoder = MLP_Decoder
+encoder = Encoder
+decoder = MLP_Decoder_C
 #decoder = autoregressive_decoder
 #decoder = autoregressive_decoder_multi_decoder
     
@@ -52,6 +47,9 @@ if args.train_model == 0:
     checkpoint = torch.load(args.resume_checkpoint)
     model.load_state_dict(checkpoint['model'],strict=True)
     model.eval()
+    #viz_reconstruct(model,args)
+    #sample_structure(model)
+    exit(1)
     #Generate random samples and reconstruct input and likelihood of the model computed on test data
     print("===========================================")
     print("Generate random samples and reconstruct input and likelihood of the model computed on test data")
