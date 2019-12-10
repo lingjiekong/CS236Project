@@ -5,7 +5,7 @@ import numpy as np
 from datasets import get_datasets, synsetid_to_cate,init_np_seed
 from args import get_args
 from metrics.evaluation_metrics import CD_loss
-from utils import visualize_point_clouds_4
+from utils import visualize_point_clouds_4,sort_object
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib.pyplot import imsave
@@ -46,6 +46,8 @@ def viz_reconstruct(model,args,nset=2,dtype='val',viz_size=8 ):
         data_num=0
         for counter,data in enumerate(loader):
             idx_b, tr_pc, te_pc = data['idx'], data['train_points'], data['test_points']
+            if args.sort_input:
+               te_pc = sort_object(te_pc,args.sort_dim)
             te_pc =  te_pc.to(device)
             samples = model.reconstruct_input(te_pc)
             g_truth=CD_loss(te_pc,samples)
@@ -101,7 +103,8 @@ def evaluate_model(model, dataset, args, init_seed=2019, batch_size=64):
     with torch.no_grad():
         for bidx, data in enumerate(data_iter):
             idx_batch, tr_batch, te_batch = data['idx'], data['train_points'], data['test_points']
-
+            if args.sort_input:
+               tr_batch = sort_object(tr_batch,args.sort_dim)
             inputs = tr_batch.to(device)
             inputs_dict = {'x':inputs}
 
@@ -133,6 +136,9 @@ def eval_model_reconstruct(model,args,dtype='val',denormalize=True):
     with torch.no_grad():
         for data in loader:
             idx_b, tr_pc, te_pc = data['idx'], data['train_points'], data['test_points']
+            if args.sort_input:
+               tr_pc = sort_object(tr_pc,args.sort_dim)
+               te_pc = sort_object(te_pc,args.sort_dim)
             tr_pc = tr_pc.to(device)
             te_pc = te_pc.to(device)
             #pudb.set_trace()
@@ -164,6 +170,9 @@ def eval_model_random_sample(model,args,dtype='val',Nsamples=None,denormalize=Tr
     with torch.no_grad():
         for data in loader:
             idx_b, tr_pc, te_pc = data['idx'], data['train_points'], data['test_points']
+            if args.sort_input:
+               tr_pc = sort_object(tr_pc,args.sort_dim)
+               te_pc = sort_object(te_pc,args.sort_dim)
             tr_pc = tr_pc.to(device)
             te_pc = te_pc.to(device)
             if denormalize == True:                 #denormalize = True is required for computing JS-Divergence (makes data between 0-1)
@@ -244,6 +253,8 @@ def cal_nelbo_samples(model,args, dtype='val'):
     with torch.no_grad():
         for data in loader:
             idx_b, tr_pc, te_pc = data['idx'], data['train_points'], data['test_points']
+            if args.sort_input:
+               te_pc = sort_object(te_pc,args.sort_dim)
             inputs = te_pc.to(device)
             inputs_dict = {'x':inputs}
             if model.type == 'CVAE':
@@ -283,3 +294,28 @@ def cal_nelbo_samples(model,args, dtype='val'):
     plt.hist(rec_loss,bins=20)
     plt.savefig("Rec_loss")
     return metrics
+
+
+def save_intermediate(model,args,jj):
+    loader = iter(get_test_loader(args))
+    data = next(loader)
+    tr_batch =  data['train_points']   #train_points
+    folder='xyz_file'
+    if not os.path.exists(folder):
+       os.makedirs(folder)
+
+    with torch.no_grad():
+        samples = model.reconstruct_input(tr_batch)
+        n_points = int(samples[0].shape[1]/args.n_groups)
+        for i in range(len(samples)):
+            start_i = i*n_points
+            end_i = (i+1)*n_points
+            writexyz_file(y[jj,start_i:end_i,:],n_points,str(i))
+
+def writexyz_file(samples,n_points,ii,f_name,folder='xyz_file'):
+    f_name= folder+'/'+f_name+'.xyz'
+    with open(f_name,'w') as out_file:
+        out_file.write('{} \n \n'.format(n_points))
+        for jj in range(n_points):
+            out_file.write('M  {0:12.6f} \t  {1:12.6f} \t {2:12.6f} \n'.format(
+                samples[jj,0].item(),samples[jj,1].item(),samples[jj,2].item()))

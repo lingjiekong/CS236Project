@@ -60,7 +60,10 @@ def add_args(parser):
                         help='Learning rate schedule exponential decay rate')
     parser.add_argument('--exp_decay_freq', type=int, default=1,
                         help='Learning rate exponential decay frequency')
-
+    parser.add_argument('--deco_type', type=str, default='mlp',
+                        help='decoder types to use', choices=['mlp', 'auto'])
+    parser.add_argument('--n_groups', type= int, default=8,
+                         help='number of groups the data is to be divided')
     # data options
     parser.add_argument('--dataset_type', type=str, default="shapenet15k",
                         help="Dataset types.", choices=['shapenet15k', 'modelnet40_15k', 'modelnet10_15k'])
@@ -86,6 +89,10 @@ def add_args(parser):
                         help='Max number of sampled points (test)')
     parser.add_argument('--num_workers', type=int, default=4,
                         help='Number of data loading threads')
+    parser.add_argument('--sort_input', action='store_true',
+                        help='sort point clounds along a specific dimension')
+    parser.add_argument('--sort_dim', type=int,default=0,
+                        help=' direction of sorting 0|1|2')
 
     # logging and saving frequency
     parser.add_argument('--log_name', type=str, default=None, help="Name for the log dir")

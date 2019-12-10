@@ -2,7 +2,8 @@ import torch
 import numpy as np
 from args import get_args
 from models.vae import VAE
-from models.networks import Encoder, MLP_Decoder, autoregressive_decoder, autoregressive_decoder_multi, autoregressive_decoder_multi_decoder, TransformerEncoder
+from models.networks import Encoder, MLP_Decoder, autoregressive_decoder, TransformerEncoder
+
 from utils import set_random_seed
 from train import train
 from test  import viz_reconstruct, sample_structure, eval_model_reconstruct ,eval_model_random_sample,cal_nelbo_samples
@@ -30,12 +31,20 @@ elif args.encoder == 'mlp':
 	encoder = Encoder
 else:
 	raise Exception('Invalid encoder type:{0}'.format(args.encoder))
+
+if args.deco_type == 'mlp':
+   decoder = MLP_Decoder
+   loss_type = 'chamfer'
+elif args.deco_type == 'auto':
+   decoder = autoregressive_decoder
+   args.sort_input = True
+   loss_type='auto_chamfer'
+   print("Input is sorred:",args.sort_input,"along ",args.sort_dim,"into: ",args.n_groups)
+else:
+   raise Exception('Invalid decoder type:{0}'.format(args.deco_type))
 	
-decoder = MLP_Decoder
-#decoder = autoregressive_decoder
-#decoder = autoregressive_decoder_multi_decoder
-    
-model = VAE(encoder,decoder,args)
+model = VAE(encoder,decoder,args,loss_type)
+ 
 
 if device.type == 'cuda':
     model = model.cuda()

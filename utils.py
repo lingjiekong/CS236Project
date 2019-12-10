@@ -141,4 +141,14 @@ def visualize_point_clouds_4(pts_1, gtr_1, pts_2, gtr_2,idx_1, idx_2,loss1,loss2
     plt.close()
     return res
 
-
+def sort_object(obj,dim=0):
+    n_object=obj.size(0)
+    new_obj=[]
+    for val in range(n_object):
+        ind_=torch.sort(obj[val],0)[1]
+        ind_=ind_[:,dim]
+        new_obj.append(obj[val][ind_].numpy())
+    new_obj = np.asarray(new_obj)
+    new_obj=torch.from_numpy(new_obj)
+    new_obj=new_obj.to(device)
+    return new_obj

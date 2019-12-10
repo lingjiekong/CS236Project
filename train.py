@@ -9,6 +9,7 @@ import random
 import warnings
 from utils import set_random_seed,visualize_point_clouds,save,resume
 from utils import apply_random_rotation
+from utils  import sort_object
 from test import evaluate_model, eval_model_reconstruct, eval_model_random_sample,cal_nelbo_samples
 from datasets import get_datasets, init_np_seed
 from matplotlib.pyplot import imsave
@@ -79,6 +80,8 @@ def main_train_loop(save_dir,model,args):
         model.train()
         for bidx, data in enumerate(train_loader):
             idx_batch, tr_batch, te_batch = data['idx'], data['train_points'], data['test_points']
+            if args.sort_input:
+               tr_batch = sort_object(tr_batch,args.sort_dim)
             step = bidx + len(train_loader) * epoch
 
             if args.random_rotate:

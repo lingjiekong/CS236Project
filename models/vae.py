@@ -8,13 +8,15 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 import pudb
 
 class VAE(nn.Module):
-    def __init__(self,encoder,decoder,args):
+    def __init__(self,encoder,decoder,args,loss_type='chamfer'):
         super(VAE, self).__init__()
         self.n_point = args.tr_max_sample_points
         self.point_dim = 3
         self.n_point_3 = self.point_dim * self.n_point 
+        self.n_groups = args.n_groups
+        self.g_points = int(self.n_point /self.n_groups)
         self.z_dim = args.zdim
-        self.loss_type = 'chamfer'
+        self.loss_type = loss_type
         self.loss_sum_mean = args.loss_sum_mean
         self.use_deterministic_encoder = args.use_deterministic_encoder
         self.use_encoding_in_decoder = args.use_encoding_in_decoder
@@ -22,8 +24,12 @@ class VAE(nn.Module):
         
         if not self.use_deterministic_encoder and self.use_encoding_in_decoder:
             self.decoder = decoder(2 *self.z_dim,self.n_point,self.point_dim)
-        else:
+        elif args.deco_type == 'mlp':
             self.decoder = decoder(self.z_dim,self.n_point,self.point_dim)
+        elif args.deco_type == 'auto':
+            self.decoder = decoder(self.z_dim,self.n_point,self.point_dim,self.n_groups)
+        else:
+            raise Exception('Invalid decoder type:{0}'.format(args.deco_type))
            
         #set prior parameters of the vae model p(z)
         self.z_prior_m = torch.nn.Parameter(torch.zeros(1), requires_grad=False)
@@ -49,6 +55,12 @@ class VAE(nn.Module):
         #compute reconstruction loss 
         if self.loss_type is 'chamfer':
             x_reconst = CD_loss(y,x)
+        if self.loss_type is 'auto_chamfer':
+            x_reconst=CD_loss(y[:,:self.g_points,:],x[:,:self.g_points,:])
+            for i in range(1, self.n_groups):
+                start_i=i*self.g_points
+                end_i=(i+1)*self.g_points
+                x_reconst = x_reconst + CD_loss(y[:,start_i:end_i,:],x[:,start_i:end_i,:])
         # mean or sum
         if self.loss_sum_mean == "mean":
             x_reconst = x_reconst.mean()
